@@ -4,9 +4,9 @@
 commands:
 
  ls [folder ...]
-    list the messages in the specified folders (INBOX by default)
-    An alternative to this command is "lisp" which does the same thing
-    but returns s-expressions.
+    list the messages in the specified folders (INBOX by default) An
+    alternative to this command is "lsjson" which does the same thing
+    but returns json.
 
  folders    
     list the folders, except the inbox.
@@ -294,8 +294,10 @@ def ls(folders=None):
             logger.error("whoops! %s" % (str(e)))
 
 
-
 def lisp(folders=None):
+    return lsjson(folders)
+
+def lsjson(folders=None):
     """Outputs state of a folder as a JSON structure for each message.
     Each message is output with a message key which can be used to 
     retrieve the message later.
@@ -393,7 +395,7 @@ def trash(messages=None, subjectfilter=None):
 
 if __name__ == "__main__":
     # We need option processing in here
-    if sys.argv[1] in ["ls", "lisp", 
+    if sys.argv[1] in ["ls", "lisp", "lsjson", 
                        "mkfolder", "folders", 
                        "get", "getstruct", "gettext",
                        "trash",
