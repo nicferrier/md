@@ -217,6 +217,8 @@ def _list(folders=["INBOX"]):
 
     It stores retrieved messages in memcache for later pulling."""
 
+    if folders == []:
+        folders = ["INBOX"]
     mdirs = [(folder, inbox_folder_guard(mdir, folder)) \
                  for folder in folders]
 
@@ -273,7 +275,7 @@ def _list(folders=["INBOX"]):
         # And finally print cache performance
         logger.info("cache hits: %d" % cache_hits)
 
-def ls(folders=None):
+def ls(folders=["INBOX"]):
     """Outputs simple state of a folder
 
     This is designed to be called from shell and processed with awk
