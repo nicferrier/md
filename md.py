@@ -31,25 +31,21 @@ from os.path import exists
 from os.path import join as joinpath
 from os.path import split as splitpath
 
-import pprint
 import time
 from datetime import datetime
 
-import email
 from email.parser import FeedParser
 from email.parser import HeaderParser
 from email.utils import parsedate_tz
 from email.utils import parsedate
 from email.utils import parseaddr
 from email.utils import mktime_tz
-import rfc822   ## this is legacy but used by python's default maildir implementation
 
 import simplejson
 import pdb
 import memcache
 from StringIO import StringIO
 import logging
-import mmap    
 
 
 logger = logging.getLogger("md")
@@ -58,6 +54,10 @@ logging.basicConfig()
 folderlist = {}
 
 class HeaderOnlyParser(HeaderParser):
+    """JUST parse the header
+
+    Python's HeaderParser actually parses the whole message. Duh."""
+
     def parse(self, fp, headersonly=True):
         """Create a message structure from the data in a file."""
         feedparser = FeedParser(self._class)
@@ -76,8 +76,14 @@ class HeaderOnlyParser(HeaderParser):
 hdr_parser = HeaderOnlyParser()
 
 class _MdMessage(mailbox.MaildirMessage):
+    """An extension of standard maildir message that irons out bad behaviour.
+
+    The message records the maildir it came from. It can have it's
+    maildir set so you don't need to regenerate.
+    """
     def __init__(self, message=None, folder=None):
         """Pass the file's header only"""
+        self.logger = logging.getLogger("_MdMessage")
         self._key = None
         if folder:
             self._folder = folder._path
@@ -97,17 +103,18 @@ class _MdMessage(mailbox.MaildirMessage):
         self._folder = maildir._path
 
     def get_maildir(self):
-        #logger.error("get_maildir: %s" % (self._folder))
-        try:
-            global folderlist
-            maildir = folderlist.get(self._folder)
-        except Keyerror:
-            #logger.error("could not find %s in %s" % (self._folder, folderlist))
+        global folderlist
+        maildir = folderlist.get(self._folder)
+        if not maildir:
+            self.logger.debug("could not find %s in %s" % (self._folder, folderlist))
             maildir = Md(self._folder,
                          factory=_MdMessage,
                          create=False)
 
-        #logger.error("get_maildir: %s with get for %s" % (maildir._path, repr(maildir)))
+        self.logger.debug("get_maildir: %s with get for %s" % (
+                maildir._path, 
+                repr(maildir)
+                ))
         return maildir
 
     def set_key(self, key):
@@ -120,10 +127,14 @@ class _MdMessage(mailbox.MaildirMessage):
                 specific_path = maildir._lookup(self._key)
                 msg_path = joinpath(maildir._path, specific_path)
                 if exists(msg_path):
-                    new_specific = joinpath(subdir,
-                                            *splitpath(specific_path)[1:])
-                    os.rename(msg_path, 
-                              joinpath(maildir._path, new_specific))
+                    new_specific = joinpath(
+                        subdir,
+                        *splitpath(specific_path)[1:]
+                        )
+                    os.rename(
+                        msg_path, 
+                        joinpath(maildir._path, new_specific)
+                        )
                     self._subdir = subdir
 
 class Md(mailbox.Maildir):
