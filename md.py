@@ -83,7 +83,6 @@ class _MdMessage(mailbox.MaildirMessage):
     """
     def __init__(self, message=None, folder=None):
         """Pass the file's header only"""
-        self.logger = logging.getLogger("_MdMessage")
         self._key = None
         if folder:
             self._folder = folder._path
@@ -106,12 +105,12 @@ class _MdMessage(mailbox.MaildirMessage):
         global folderlist
         maildir = folderlist.get(self._folder)
         if not maildir:
-            self.logger.debug("could not find %s in %s" % (self._folder, folderlist))
+            logger.debug("could not find %s in %s" % (self._folder, folderlist))
             maildir = Md(self._folder,
                          factory=_MdMessage,
                          create=False)
 
-        self.logger.debug("get_maildir: %s with get for %s" % (
+        logger.debug("get_maildir: %s with get for %s" % (
                 maildir._path, 
                 repr(maildir)
                 ))
@@ -237,9 +236,7 @@ def _list(folders=["INBOX"]):
     #pdb.set_trace()
     for folder,maildir in mdirs:
         mks = maildir.keys()
-        cached_msgs = cache.get_multi(mks, "md%s" % ({
-                    "INBOX": "", 
-                    }.get(folder,folder)))
+        cached_msgs = cache.get_multi(mks, "md%s" % folder if folder else "INBOX")
 
         logger.error("got %d" % len(cached_msgs.keys()))
         new_msgs = {}
@@ -259,10 +256,9 @@ def _list(folders=["INBOX"]):
                     msg.set_subdir("cur")
 
                 # Cache it: this is relatively inefficient
-                # pdb.set_trace()
-                cache.set("md%s%s" % ({
-                            "INBOX": ""
-                            }.get(folder,folder), mk), msg)
+                cache.set(
+                    "md%s%s" % (folder if folder else "INBOX", mk), 
+                    msg)
             else:
                 cache_hits += 1
 
