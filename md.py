@@ -197,7 +197,7 @@ def _getcache():
 
 def folders(*args):
     """Returns folders. Does not return INBOX currently"""
-    for folder in mdir.list_folders():
+    for folder in ["INBOX"] + mdir.list_folders():
         print folder
 
 def inbox_folder_guard(mdir, folder_name, factory=_MdMessage):
