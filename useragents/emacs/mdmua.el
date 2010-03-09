@@ -181,20 +181,6 @@ useful while we're developing mdmua"""
          `(marked t 
                   face (foreground-color . "green")))))))
 
-(defun mdmua-trash-marked ()
-  (interactive)
-  (save-excursion
-    (beginning-of-buffer)
-    (let ((pos (next-single-property-change (point) 'marked))
-	  (marked '()))
-      (while pos
-	(setq marked 
-	      (append marked (list  
-			      (cons
-			       (plist-get (text-properties-at pos) 'folder)
-			       (plist-get (text-properties-at pos) 'key)))))
-	(setq pos (next-single-property-change pos 'marked)))
-      (message "%s" marked))))
 
 (defun mdmua-sentinel-trash (proc signal)
   (cond
@@ -219,6 +205,38 @@ useful while we're developing mdmua"""
       )
     (kill-buffer (process-buffer proc))
     )))
+
+(defun mdmua-trash-marked ()
+  (interactive)
+  (save-excursion
+    (beginning-of-buffer)
+    (let ((pos (next-single-property-change (point) 'marked))
+	  (marked '()))
+      (while pos
+	(setq marked 
+	      (append marked (list  
+			      (cons
+			       (plist-get (text-properties-at pos) 'folder)
+			       (plist-get (text-properties-at pos) 'key)))))
+	(setq pos (next-single-property-change pos 'marked)))
+      ;; need to transform (folder-name . message-key) into message-key
+      (let ((keys 
+             (mapconcat 
+              (lambda (x)(cdr x)) marked " ")))
+        (let ((buf (current-buffer))
+              (proc 
+               (start-process-shell-command 
+                ;; TODO:::
+                ;; rewrite md so it can take message lists on stdin
+                ;; then send trashed messages on stdin
+                "mdmua" "mdmua-channel" md-bin-path "trash" message)))
+          (set-process-sentinel proc 'mdmua-sentinel-trash)
+          (with-current-buffer (process-buffer proc)
+            (make-local-variable 'trash-info)
+            (seq trash-info `(:folder-buffer ,buf
+                                             :message-key ,message 
+                                             :folder-name ,folder)))
+          )))))
 
 (defun mdmua-trash-message-x (message folder)
   "Delete the specified messages
