@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
-"""md.py command
+"""
+md.py command
 commands:
 
  ls [folder ...]
@@ -20,7 +21,7 @@ commands:
  gettext <tag>
     shows the first text part it can find.
 
-Author: nic ferrier - nferrier@tapsellferrier.co.uk
+Author: nic ferrier - nic@ferrier.me.uk
 """
 
 import mailbox
@@ -346,7 +347,11 @@ def fetch(folders=None):
         output = commands.getoutput(cmdstr)
         print "imported %d into %s" % (len(output.split("\n")), folder)
     
-def _messageop(messages=None, subjectfilter=None):
+def _messageop(messages=None, subjectfilter=None): 
+    """Finds messages by keys searching across folders.
+
+    Applies the optional subjectfilter.
+    """
     cache = _getcache()
     # Does message awareness via the embedded key
     folders = mdir.list_folders() + ["INBOX"]
@@ -402,18 +407,40 @@ def trash(messages=None, subjectfilter=None):
         folder = msg.get_maildir()
         folder.remove(msg._key)
 
-if __name__ == "__main__":
+def trashre(regex=None):
+    """Very sketchy regex rm
+
+    Specific to INBOX right now.
+    """
+    # FIXME we NEED to sort out command line parsing 
+    # so we can do things like specify folder
+    for folder, mk, m in _list(["INBOX"]):
+        if re.match(regex[0], m.get("subject", "")):
+            folder = m.get_maildir()
+            folder.remove(mk)
+
+
+def main():
     # We need option processing in here
-    if sys.argv[1] in ["ls", "lisp", "lsjson", 
-                       "mkfolder", "folders", 
-                       "get", "getstruct", "gettext",
-                       "trash",
-                       "fetch",
-                       "help"]:
+    if sys.argv[1] in [
+        "ls", "lisp", "lsjson", 
+        "mkfolder", "folders", 
+        "get", "getstruct", "gettext",
+        "trash", "trashre",
+        "fetch",
+        "help"
+        ]:
+
         if len(sys.argv) > 2 and sys.argv[2] == "-":
             args = sys.stdin.read().split("\n")
         else:
             args = repr(sys.argv[2:])
-        exec "%s(%s)" % (sys.argv[1], args)
+
+        pythonscript = "%s(%s)" % (sys.argv[1], args)
+        exec pythonscript
+
+
+if __name__ == "__main__":
+    main()
 
 # End
