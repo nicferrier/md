@@ -12,6 +12,9 @@ classifiers = [
     'Topic :: Communications:: Email',
 ]
 
+# Depends
+# pyproxyfs
+# cmdln
 setup(
     name = "md",
     version = "0.1",
@@ -24,8 +27,8 @@ setup(
     url = "http://github.com/nicferrier/md",
     download_url="http://github.com/nicferrier/md/downloads",
     platforms = ["unix"],
-    #packages = ["md"],
-    #package_dir = {"":"src"},
+    packages = ["mdlib"],
+    package_dir = {"":"src"},
     scripts=['src/md'],
     classifiers =  classifiers
     )
