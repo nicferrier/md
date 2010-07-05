@@ -1,23 +1,14 @@
 #!/usr/bin/python
 
 """
-md - A maildir tool.
-
-md provides three important things:
-
-1. a maildir folder object allowing API access at a low level
-
-2. a maildir client object allowing API access at a high level
-
-3. a command line client API for cmd line use, shell scripting or tool building.
-
-Author: nic ferrier - nic@ferrier.me.uk
+mdlib - A maildir and maildir client library .
 """
+
+__author__= "nic ferrier - nic@ferrier.me.uk"
+__version__ = "0.1"
 
 import sys
 import re
-import os
-from os.path import exists
 from os.path import abspath
 from os.path import join as joinpath
 from os.path import split as splitpath
@@ -38,11 +29,10 @@ try:
 except ImportError:
     import simplejson as json
 
-import pdb
 from StringIO import StringIO
 import logging
 
-logger = logging.getLogger("md")
+logger = logging.getLogger("mdlib")
 logging.basicConfig()
 
 folderlist = {}
@@ -444,58 +434,5 @@ class MdClient(object):
             if part.get_content_type() == "text/plain":
                 print >>stream, part.get_content_type()
 
-
-## This should be redefined as an option and a thread local
-## Default value should come from an env var or be ~/Maildir
-HOMEMAILDIR = os.path.join(os.environ["HOME"], "Maildir")
-MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
-mdir = MdFolder(MAILDIR)
-
-# Depends on cmdlin
-import cmdln
-
-class MdCLI(cmdln.Cmdln):
-    name = "md"
-
-    def do_ls(self, subcmd, opts, folder=""):
-        """List messages in the specified folder"""
-        client = MdClient(MAILDIR)
-        client.ls(foldername=folder,stream=sys.stdout)
-
-    def do_lisp(self, subcmd, opts, folder=""):
-        """List messages in the specified folder in JSON format"""
-        client = MdClient(MAILDIR)
-        client.lisp(foldername=folder,stream=sys.stdout)
-
-    def do_make(self, subcmd, opts, path):
-        """Make a maildir at the specified path.
-
-        If the path is relative then create under MAILDIR
-        else create at the absolute location.
-        """
-        d = path[0] if path[0][0] == "/" else joinpath(MAILDIR, path[0])
-        os.makedirs(joinpath(d, "cur"))
-        os.makedirs(joinpath(d, "new"))
-        os.makedirs(joinpath(d, "tmp"))
-
-    def do_text(self, subcmd, opts, message):
-        """Get the best text part of the specified message"""
-        client = MdClient(MAILDIR)
-        client.gettext(message, sys.stdout)
-
-    def do_struct(self, subcmd, opts, message):
-        """Get the structure of the specified message"""
-        client = MdClient(MAILDIR)
-        client.getstruct(message, sys.stdout)
-
-    def do_shell(self, subcmd, opts):
-        """Run a shell for md"""
-        # TODO fix this because it's broken right now
-        shell = MdCLI()
-        mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
-
-if __name__ == "__main__":
-    mdcli = MdCLI()
-    sys.exit(mdcli.main())
 
 # End
