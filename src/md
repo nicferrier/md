@@ -1,18 +1,27 @@
 #!/usr/bin/python
 
+# md - a simple maildir command line user agent
+# Copyright (C) 2010  Nic Ferrier <nic@ferrier.me.uk>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 """
-md - A maildir tool.
-
-md provides three important things:
-
-1. a maildir folder object allowing API access at a low level
-
-2. a maildir client object allowing API access at a high level
-
-3. a command line client API for cmd line use, shell scripting or tool building.
-
-Author: nic ferrier - nic@ferrier.me.uk
+md - A maildir command line user agent.
 """
+
+__author__ == "Nic Ferrier <nic@ferrier.me.uk>"
+__version__ == 0.1
 
 import os.path
 import os
