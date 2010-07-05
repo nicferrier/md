@@ -1,8 +1,8 @@
 
-from md import MdFolder
-from md import MdClient
-from md import MDMSGPATHRE
-from md import SEPERATOR
+from mdlib import MdFolder
+from mdlib import MdClient
+from mdlib import MDMSGPATHRE
+from mdlib import SEPERATOR
 from StringIO import StringIO
 
 TESTMSG = """Return-Path: <%s>
