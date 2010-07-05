@@ -1,34 +1,24 @@
 #!/usr/bin/python
 
 """
-md.py command
-commands:
+md - A maildir tool.
 
- ls [folder ...]
-    list the messages in the specified folders (INBOX by default) An
-    alternative to this command is "lsjson" which does the same thing
-    but returns json.
+md provides three important things:
 
- folders    
-    list the folders, except the inbox.
+1. a maildir folder object allowing API access at a low level
 
- get <tag> 
-    show the message.
+2. a maildir client object allowing API access at a high level
 
- getstruct <tag>
-    show the structure of the message
-
- gettext <tag>
-    shows the first text part it can find.
+3. a command line client API for cmd line use, shell scripting or tool building.
 
 Author: nic ferrier - nic@ferrier.me.uk
 """
 
-import mailbox
 import sys
 import re
 import os
 from os.path import exists
+from os.path import abspath
 from os.path import join as joinpath
 from os.path import split as splitpath
 
@@ -37,17 +27,20 @@ from datetime import datetime
 
 from email.parser import FeedParser
 from email.parser import HeaderParser
+from email.parser import Parser
 from email.utils import parsedate_tz
 from email.utils import parsedate
 from email.utils import parseaddr
 from email.utils import mktime_tz
 
-import simplejson
+try:
+    import json
+except ImportError:
+    import simplejson as json
+
 import pdb
-import memcache
 from StringIO import StringIO
 import logging
-
 
 logger = logging.getLogger("md")
 logging.basicConfig()
@@ -76,371 +69,433 @@ class HeaderOnlyParser(HeaderParser):
 
 hdr_parser = HeaderOnlyParser()
 
-class _MdMessage(mailbox.MaildirMessage):
-    """An extension of standard maildir message that irons out bad behaviour.
-
-    The message records the maildir it came from. It can have it's
-    maildir set so you don't need to regenerate.
-    """
-    def __init__(self, message=None, folder=None):
-        """Pass the file's header only"""
-        self._key = None
-        if folder:
-            self._folder = folder._path
-        msgobj = hdr_parser.parse(message, headersonly=True)
-        mailbox.MaildirMessage.__init__(self, msgobj)
+from pyproxyfs import Filesystem
+OSFILESYSTEM = Filesystem()
+MDMSGPATHRE = "%s/(?P<key>[0-9]+\\.[A-Za-z0-9]+)\\.(?P<hostname>[.A-Za-z0-9-]+)(:[2],(?P<flags>[PRSTDF]*))*"
+SEPERATOR="#"
+class MdMessage(object):
+    def __init__(self, 
+                 messagefd, 
+                 key, 
+                 filename="", 
+                 folder=None, 
+                 filesystem=OSFILESYSTEM):
         try:
-            d=parsedate_tz(msgobj["date"])
-            t=mktime_tz(d)
-            self._date = t
-        except Exception:
-            try:
-                self._date = time.mktime(parsedate(msgobj["date"]))
-            except:
-                pass
+            self.content = messagefd.read()
+        except AttributeError:
+            self.content = ""
 
-    def set_maildir(self, maildir):
-        self._folder = maildir._path
-
-    def get_maildir(self):
-        global folderlist
-        maildir = folderlist.get(self._folder)
-        if not maildir:
-            logger.debug("could not find %s in %s" % (self._folder, folderlist))
-            maildir = Md(self._folder,
-                         factory=_MdMessage,
-                         create=False)
-
-        logger.debug("get_maildir: %s with get for %s" % (
-                maildir._path, 
-                repr(maildir)
+        self.msgobj = hdr_parser.parse(
+            StringIO(self.content), 
+            headersonly=True
+            )
+        self.headers_only = True
+        self.folder = folder
+        self.filename = filename
+        self.filesystem = filesystem
+        self.msgpathre = re.compile(MDMSGPATHRE % joinpath(
+                self.folder.base,
+                self.folder.folder, 
+                "cur"
                 ))
-        return maildir
+        self.key = key
+        self.hdrmethodre = re.compile("get_([a-z_]+)")
+        try:
+            d = parsedate_tz(self.msgobj["Date"])
+            t = mktime_tz(d)
+            self.time = t
+        except Exception, e:
+            try:
+                self.time = time.mktime(parsedate(self.msgobj["Date"]))
+            except Exception, e:
+                self.time = -1
 
-    def set_key(self, key):
-        self._key = key
+    def walk(self):
+        if self.headers_only:
+            self.msgobj = Parser().parse(StringIO(self.content))
+        return self.msgobj.walk()
 
-    def set_subdir(self, subdir):
-        if subdir != self._subdir:
-            maildir = self.get_maildir()
-            if maildir:
-                specific_path = maildir._lookup(self._key)
-                msg_path = joinpath(maildir._path, specific_path)
-                if exists(msg_path):
-                    new_specific = joinpath(
-                        subdir,
-                        *splitpath(specific_path)[1:]
-                        )
-                    os.rename(
-                        msg_path, 
-                        joinpath(maildir._path, new_specific)
-                        )
-                    self._subdir = subdir
+    def get_content_type(self):
+        if self.headers_only:
+            self.msgobj = Parser().parse(StringIO(self.content))
+        return dict(self.msgobj._headers).get("Content_type", "text/plain")
 
-class Md(mailbox.Maildir):
-    def __init__(self, *args, **kwargs):
-        mailbox.Maildir.__init__(self, *args, **kwargs)
-        self._last_read = None
-        self._new_path = joinpath(self._path, 'new')
-        self._cur_path = joinpath(self._path, 'cur')
-        global folderlist
-        folderlist[self._path] = self
+    def __getattr__(self, attrname):
+        """Implements the get methods for SMTP headers on the embedded message."""
+        msg = self.__dict__["msgobj"]
+        m = self.__dict__["hdrmethodre"].match(attrname)
+        if msg and m:
+            hdrs = dict(msg.__dict__["_headers"])
+            attr = m.group(1)
+            fieldname = "".join([attr[0].upper(), attr[1:]])
+            return lambda: hdrs.get(fieldname, "")
 
-    def __str__(self):
-        return "%s %s" % (repr(self), self._path)
+    def iteritems(self):
+        """Present the email headers"""
+        for n,v in self.msgobj.__dict__["_headers"]:
+            yield n.lower(), v
+        return
 
-    def get_folder(self, folder):
-        path = joinpath(self._path, "." + folder)
-        global folderlist
-        #logger.error("%s with get for %s" % (id(self), path))
-        maildirfolder = folderlist.get(path, 
-                                       Md(path,
-                                          factory=self._factory,
-                                          create=False))
-        return maildirfolder
-        
+    def items(self):
+        """Present the email headers"""
+        return list(self.iteritems())
 
-    def _refresh(self):
-        #logger.error("refresh: %s %s" % (self, self._last_read))
-        #logger.error("refresh: %s" % folderlist)
-        new_mtime = os.path.getmtime(self._new_path)
-        cur_mtime = os.path.getmtime(self._cur_path)
-        
-        if self._last_read is not None \
-                and new_mtime <= self._last_read \
-                and cur_mtime <= self._last_read:
-            #logger.error("%s skipping refresh" % self)
-            return
+    def _flags(self):
+        m = self.msgpathre.match(self.filename)
+        return m.groups("flags")
 
-        mailbox.Maildir._refresh(self)
-        self._last_read = time.time()
-        #logger.error("refresh (end): %s %s" % (self, self._last_read))
+    def _set_flag(self, flag):
+        """Turns the specified flag on"""
+        # TODO::: turn the flag off when it's already on
+        def replacer(m):
+            return "%s/%s.%s%s" % (
+                joinpath(self.folder.base, self.folder.folder, "cur"),
+                m.group("key"),
+                m.group("hostname"),
+                ":2,%s" % (
+                    "%s%s" % (m.group("flags"), flag) if m.group("flags") \
+                        else flag
+                    )
+                )
+        newfilename = self.msgpathre.sub(replacer, self.filename)
+        self.filesystem.rename(self.filename, newfilename)
+        self.filename = newfilename
 
+    @property
+    def date(self):
+        return datetime.fromtimestamp(self.time * 1.0)
 
-## This should be redefined as an option and a thread local
-## Default value should come from an env var or be ~/Maildir
-HOMEMAILDIR = os.path.join(os.environ["HOME"], "Maildir")
-MAILDIR = os.environ.get("MAILDIR", HOMEMAILDIR)
-mdir = Md(MAILDIR, factory=_MdMessage)
+    @property
+    def is_seen(self):
+        return "S" in self._flags()
 
-# The Maildir seen flag
-SEEN_FLAG="S"
-TRASHED_FLAG="T"
+    @is_seen.setter
+    def is_seen(self, value):
+        self._set_flag("S")
 
-def _lisp(*args):
-    return "(%s)" % " ".join(("\"%s\"" % str(x) for x in args))
+    @property
+    def is_trashed(self):
+        return "T" in self._flags()
 
-def help(*args):
-    print __doc__
+    @is_trashed.setter
+    def is_trashed(self, value):
+        self._set_flag("T")
 
-def _getcache():
-    return memcache.Client(servers=["127.0.0.1:11211"])
+    def __repr__(self):
+        return "%s__%s__%s" % (
+            self.__class__.__name__, 
+            self.folder,
+            self.key
+            )
 
-def folders(*args):
-    """Returns folders. Does not return INBOX currently"""
-    for folder in ["INBOX"] + mdir.list_folders():
-        print folder
+class MdFolder(object):
+    """A Maildir folder.
 
-def inbox_folder_guard(mdir, folder_name, factory=_MdMessage):
-    """Helps with abstracting the inbox"""
-    mdir = Md(MAILDIR, factory)
-    if folder_name == "INBOX":
-        return mdir
-    else:
-        return mdir.get_folder(folder_name)
+    Maildir is a lockless mail store.
+    """
 
-def mkfolder(folder_name=[]):
-    """Make a new folder"""
-    # new_folder_re = "((([A-Za-z0-9_-]+)\\.)*)([A-Za-z0-9_-]+)"
-    mdir.add_folder(folder_name[0])
+    def __init__(self, foldername, base="", subfolder=False, filesystem=OSFILESYSTEM):
+        self.base = base
+        self.folder = foldername
+        self.is_subfolder = subfolder
+        self.filesystem = filesystem
 
-def escape(match_obj):
+    def _foldername(self, additionalpath=""):
+        return joinpath(self.base, self.folder, additionalpath) \
+            if not self.is_subfolder \
+            else joinpath(self.base, ".%s" % self.folder, additionalpath)
+
+    def folders(self):
+        """Return an object the holds the folders for this folder.
+
+        This is a snapshot of the folder list at the time the call was made. 
+        It does not update over time.
+        """
+
+        entrys = self.filesystem.listdir(abspath(self._foldername()))
+        just_dirs = [d for d in entrys if re.match("\\..*", d)]
+
+        folder = self._foldername()
+        filesystem = self.filesystem
+
+        class FolderList(object):
+            def __iter__(self):
+                return just_dirs.__iter__()
+
+            def __list__(self):
+                return list(self.__iter__())
+
+            def __contains__(self, item):
+                return just_dirs.__contains__(".%s" % item)
+
+            def __getitem__(self, index):
+                return MdFolder(
+                    just_dirs[index],
+                    base=folder,
+                    filesystem=filesystem)
+
+        f = FolderList()
+        return f
+
+    def __repr__(self):
+        return "<%s>" % (self.folder)
+
+    def _muaprocessnew(self):
+        """Moves all 'new' files into cur, correctly flagging"""
+        files = self.filesystem.listdir(self._foldername("new"))
+        for filename in files:
+            if filename == "":
+                continue
+            newfilename = joinpath(
+                self._foldername("cur"),
+                "%s:2,%s" % (filename, "")
+                )
+            self.filesystem.rename(
+                self._foldername(joinpath("new", filename)),
+                newfilename
+                )
+
+    def _curiter(self):
+        """An iterator over the messages in 'cur'"""
+        for filename in self.filesystem.listdir(self._foldername("cur")):
+            yield joinpath(self._foldername("cur"), filename)
+
+    def _exists(self, key):
+        """Find a key in a particular section
+
+        Searches through all the files and looks for matches with a regex.
+        """
+        self._muaprocessnew()
+        files = list(self._curiter())
+        for filename in files:
+            m = re.match(
+                # Flags are the initial letter of the following:
+                # Passed, Replied, Seen, Trashed, Draft, Flagged
+                # Here's a better regex than the one we're using
+                # :(?P<version>[2])(?P<flags>[PRSTDF]*))
+                "%s/%s\\.([.A-Za-z0-9-]+)(:[2],([PRSTDF]*))*" % (
+                    self._foldername("cur"),
+                    key
+                    ),
+                filename
+                )
+            if m:
+                return (
+                    filename,
+                    m.group(1), # hostname 
+                    m.group(3) if m.group(2) else "" # flags
+                    )
+        raise KeyError("not found")
+            
+    def __getitem__(self, key):
+        try:
+            # Cache this stuff against key?
+            path, host, flags = self._exists(key)
+            with self.filesystem.open(path) as msgfd:
+                content = msgfd.read()
+                return MdMessage(
+                    StringIO(content), 
+                    key, 
+                    filename=path, 
+                    folder=self, 
+                    filesystem=self.filesystem
+                    ) 
+        except KeyError, e:
+            e.message = "no such message %s" % key
+            raise
+
+    def __iter__(self):
+        #pdb.set_trace()
+        self._muaprocessnew()
+        for filename in self._curiter():
+            m = re.match(
+                MDMSGPATHRE % (self._foldername("cur")),
+                filename
+                )
+            if m:
+                yield m.group("key")
+        return
+
+    def iterkeys(self):
+        return self.__iter__()
+
+    def iteritems(self):
+        for k in self.iterkeys():
+            yield k,self[k]
+
+    def keys(self):
+        return list(self.iterkeys())
+
+    def values(self):
+        return list([self[k] for k in self.iterkeys()])
+
+    def items(self):
+        return list(self.iteritems())
+
+def _escape(match_obj):
     if match_obj.group(0) == "\n":
        return ""
     if match_obj.group(0) == "\"":
         return "\\\""
     return
 
-def _list(folders=["INBOX"]):
-    """Base folder lister.
+class MdClient(object):
+    def __init__(self, maildir, filesystem=None):
+        self.logger = logging.getLogger("MdClient.%s" % maildir)
+        foldername = maildir.split("/")[-1]
+        base = splitpath(maildir)[0]
+        self.folder = MdFolder(
+            foldername if foldername else "",
+            base=base,
+            filesystem=filesystem
+            ) if filesystem else MdFolder(foldername if foldername else "",
+                                          base=base
+                                          )
 
-    This is used by the lister frontends like ls and lisp.
-
-    It stores retrieved messages in memcache for later pulling."""
-
-    if folders == []:
-        folders = ["INBOX"]
-    mdirs = [(folder, inbox_folder_guard(mdir, folder)) \
-                 for folder in folders]
-
-    cache = _getcache()
-    #pdb.set_trace()
-    for folder,maildir in mdirs:
-        mks = maildir.keys()
-        cached_msgs = cache.get_multi(mks, "md%s" % folder if folder else "INBOX")
-
-        logger.error("got %d" % len(cached_msgs.keys()))
-        new_msgs = {}
-        msgs = []
-        cache_hits = 0
-        for mk in mks:
-            #pdb.set_trace()
-            msg = cached_msgs.get("%s" % mk)
-            if not msg:
-                msg = maildir.get(mk)
-                msg._key = mk
-                msg.set_maildir(maildir)
-                new_msgs[mk] = msg
-
-                # Move it to the correct subdir if necessary
-                if msg.get_subdir() == "new":
-                    msg.set_subdir("cur")
-
-                # Cache it: this is relatively inefficient
-                cache.set(
-                    "md%s%s" % (folder if folder else "INBOX", mk), 
-                    msg)
-            else:
-                cache_hits += 1
-
-            # Build the list of messages
-            try:
-                msg._key = mk
-            except AttributeError:
-                logger.error("key problem")
-
-            msgs += [msg]
-
-        # FIXME:: this doesn't work all the time
-        #  Store the new ones in memcache
-        #   c.set_multi(new_msgs, key_prefix="md")
-
-        # Now sort them and spit them out
-        msgs.sort(key=mailbox.MaildirMessage.get_date)
-        for msg in msgs:
-            yield folder, msg._key, msg
-
-        # And finally print cache performance
-        logger.info("cache hits: %d" % cache_hits)
-
-def ls(folders=["INBOX"]):
-    """Outputs simple state of a folder
-
-    This is designed to be called from shell and processed with awk
-    and other such tools.
-
-    Each message is output with a message key which can be used to 
-    retrieve the message later."""
-
-    for folder, mk, m in _list(folders):
-        try:
-            print "% 40s % 40s % 50s [%s] %s" % (
-                "%s%s" % (folder, mk),
-                datetime.fromtimestamp(m.get_date()),
-                m["from"][0:50] if m["from"] else "", 
-                m.get_flags(),
-                re.sub("\n", "", m["subject"] or ""))
-        except Exception,e:
-            logger.error("whoops! %s" % (str(e)))
-
-
-def lisp(folders=None):
-    return lsjson(folders)
-
-def lsjson(folders=None):
-    """Outputs state of a folder as a JSON structure for each message.
-    Each message is output with a message key which can be used to 
-    retrieve the message later.
-
-    Why is this method called LISP? Originally this outputted a
-    property list, a LISP data structure. It's not quicker and easier
-    to get it to output JSON... but JSON is so inspired by LISP that
-    retaining the name seemed ok."""
-
-    def fromval(hdr):
-        if hdr:
-            return parseaddr(hdr)
-
-    for folder, mk, m in _list(folders):
-        try:
-            print simplejson.dumps({
-                    'folder': folder,
-                    'key': "%s%s" % (folder, mk),
-                    'date':  str(datetime.fromtimestamp(m.get_date())),
-                    "flags": m.get_flags(),
-                    'from': fromval(m["from"]),
-                    'subject': re.sub("\n|\'|\"", escape, m["subject"] or "")
-                    })
-        except Exception, e:
-            pass
-
-import commands
-
-def fetch(folders=None):
-    for folder in folders:
-        cmdstr = """rsync -ae ssh \
- --out-format "%%n" \
- --delete %s/.%s %s | grep new""" % (
-            os.environ["MDPICKUPURL"],
-            folder,
-            os.path.join(mdir._path, folder))
-        output = commands.getoutput(cmdstr)
-        print "imported %d into %s" % (len(output.split("\n")), folder)
-    
-def _messageop(messages=None, subjectfilter=None): 
-    """Finds messages by keys searching across folders.
-
-    Applies the optional subjectfilter.
-    """
-    cache = _getcache()
-    # Does message awareness via the embedded key
-    folders = mdir.list_folders() + ["INBOX"]
-    for message_key in messages:
-        for folder in folders:
-            m = re.match("%s(.*)" % folder, message_key)
-            if m:
-                key = m.group(1)
-                maildir = inbox_folder_guard(mdir, folder, factory=None)
-                message = maildir.get_message(key)
-                message._folder = maildir._path
-                message._key = key
-                # Some standard filtering
-                if subjectfilter and re.search(subjectfilter, message["subject"]):
-                    continue
-
-                # Return the message
-                yield message_key, message
-
-                # Need to check it hasn't been deleted
-                try:
-                    # Update the maildir if the message has been updated
-                    maildir[key]
-                    maildir[key] = message
-                    cache.set("md%s" % message_key, message)
-                except KeyError:
-                    pass
-
-def getstruct(messages=None, subjectfilter=None):
-    for message_key, msg in _messageop(messages, subjectfilter):
-        print "%s ( %s )" % (
-            message_key,
-            " ".join([part.get_content_type() for part in msg.walk()]),
+    def _getfolder(self, foldername):
+        mf = MdFolder(
+            foldername=foldername,
+            base=joinpath(self.folder.base, self.folder.folder),
+            filesystem=self.folder.filesystem,
+            subfolder=True
             )
+        return mf
 
-def gettext(messages=None, subjectfilter=None):
-    for message_key,msg in _messageop(messages, subjectfilter):
-        msg.add_flag(SEEN_FLAG)
-        for hdr,val in msg.items():
-            print "%s: %s" % (hdr,val)
+    def _list(self, foldername="INBOX"):
+        """Do structured list output.
+
+        Sorts the list by date.
+        """
+        folder = self.folder \
+            if foldername == "INBOX" \
+            else self._getfolder(foldername)
+
+        lst = list(folder.iteritems())
+        for key,msg in sorted(lst, key=lambda d: d[1].date):
+            yield folder, key, msg
+        return
+
+    def ls(self, foldername="INBOX", stream=sys.stdout):
+        """Do standard text list of the folder to the stream"""
+        for folder, mk, m in self._list(foldername):
+            try:
+                # I am very unsure about this defaulting of foldername
+                print >>stream, "% -20s % 20s % 50s  [%s]  %s" % (
+                    "%s%s%s" % (folder.folder or foldername or "INBOX", SEPERATOR, mk),
+                    m.date,
+                    m.get_from()[0:50] if m.get_from() else "", 
+                    m.get_flags(),
+                    re.sub("\n", "", m.get_subject() or "")
+                    )
+            except Exception,e:
+                self.logger.exception("whoops!")
+
+    def lisp(self, foldername="INBOX", stream=sys.stdout):
+        """Do JSON list of the folder to the stream"""
+        def fromval(hdr):
+            if hdr:
+                return parseaddr(hdr)
+
+        for folder, mk, m in self._list(foldername):
+            try:
+                print >>stream, json.dumps({
+                        'folder': folder.folder,
+                        'key': "%s%s%s" % (folder.folder, SEPERATOR, mk),
+                        'date':  str(m.date),
+                        "flags": m.get_flags(),
+                        'from': fromval(m.get_from()),
+                        'subject': re.sub("\n|\'|\"", _escape, m.get_subject() or "")
+                        })
+            except Exception, e:
+                self.logger.exception("whoops!")
+
+    def lsfolders(self, stream=sys.stdout):
+        """List the subfolders"""
+        for f in self.folder.folders():
+            print >>stream, f
+
+    def _get(self, msgid):
+        foldername, msgkey = msgid.split(SEPERATOR)
+        folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
+        # Now look up the message
+        msg = folder[msgkey]
+        msg.is_seen = True
+        hdr = msg.items()
         for p in msg.walk():
-            if p.get_content_type() == "text/plain":
-                print p.as_string()
+            yield hdr,p
+        return
+
+    def gettext(self, msgid, stream=sys.stdout):
+        """Get the first text part we can find and print it as a message.
+
+        This is a simple cowpath, most of the time you want the first plan part.
+        """
+        for hdr,part in self._get(msgid):
+            if part.get_content_type() == "text/plain":
+                for hdr,val in hdr:
+                    print >>stream, "%s: %s" % (hdr,val)
+                print >>stream, part.get_payload(decode=True)
                 break
 
-def get(messages=None, subjectfilter=None):
-    for message_key,msg  in _messageop(messages, subjectfilter):
-        msg.add_flag(SEEN_FLAG)
-        print msg
-
-def trash(messages=None, subjectfilter=None):
-    for message_key, msg in _messageop(messages, subjectfilter):
-        folder = msg.get_maildir()
-        folder.remove(msg._key)
-
-def trashre(regex=None):
-    """Very sketchy regex rm
-
-    Specific to INBOX right now.
-    """
-    # FIXME we NEED to sort out command line parsing 
-    # so we can do things like specify folder
-    for folder, mk, m in _list(["INBOX"]):
-        if re.match(regex[0], m.get("subject", "")):
-            folder = m.get_maildir()
-            folder.remove(mk)
+    def getstruct(self, msgid, stream=sys.stdout):
+        """Get and print the whole message.
+        """
+        for hdr,part in self._get(msgid):
+            if part.get_content_type() == "text/plain":
+                print >>stream, part.get_content_type()
 
 
-def main():
-    # We need option processing in here
-    if sys.argv[1] in [
-        "ls", "lisp", "lsjson", 
-        "mkfolder", "folders", 
-        "get", "getstruct", "gettext",
-        "trash", "trashre",
-        "fetch",
-        "help"
-        ]:
+## This should be redefined as an option and a thread local
+## Default value should come from an env var or be ~/Maildir
+HOMEMAILDIR = os.path.join(os.environ["HOME"], "Maildir")
+MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
+mdir = MdFolder(MAILDIR)
 
-        if len(sys.argv) > 2 and sys.argv[2] == "-":
-            args = sys.stdin.read().split("\n")
-        else:
-            args = repr(sys.argv[2:])
+# Depends on cmdlin
+import cmdln
 
-        pythonscript = "%s(%s)" % (sys.argv[1], args)
-        exec pythonscript
+class MdCLI(cmdln.Cmdln):
+    name = "md"
 
+    def do_ls(self, subcmd, opts, folder=""):
+        """List messages in the specified folder"""
+        client = MdClient(MAILDIR)
+        client.ls(foldername=folder,stream=sys.stdout)
+
+    def do_lisp(self, subcmd, opts, folder=""):
+        """List messages in the specified folder in JSON format"""
+        client = MdClient(MAILDIR)
+        client.lisp(foldername=folder,stream=sys.stdout)
+
+    def do_make(self, subcmd, opts, path):
+        """Make a maildir at the specified path.
+
+        If the path is relative then create under MAILDIR
+        else create at the absolute location.
+        """
+        d = path[0] if path[0][0] == "/" else joinpath(MAILDIR, path[0])
+        os.makedirs(joinpath(d, "cur"))
+        os.makedirs(joinpath(d, "new"))
+        os.makedirs(joinpath(d, "tmp"))
+
+    def do_text(self, subcmd, opts, message):
+        """Get the best text part of the specified message"""
+        client = MdClient(MAILDIR)
+        client.gettext(message, sys.stdout)
+
+    def do_struct(self, subcmd, opts, message):
+        """Get the structure of the specified message"""
+        client = MdClient(MAILDIR)
+        client.getstruct(message, sys.stdout)
+
+    def do_shell(self, subcmd, opts):
+        """Run a shell for md"""
+        # TODO fix this because it's broken right now
+        shell = MdCLI()
+        mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
 
 if __name__ == "__main__":
-    main()
+    mdcli = MdCLI()
+    sys.exit(mdcli.main())
 
 # End
