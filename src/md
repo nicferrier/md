@@ -20,8 +20,8 @@
 md - A maildir command line user agent.
 """
 
-__author__ == "Nic Ferrier <nic@ferrier.me.uk>"
-__version__ == 0.1
+__author__ = "Nic Ferrier <nic@ferrier.me.uk>"
+__version__ = 0.1
 
 import os.path
 import os
