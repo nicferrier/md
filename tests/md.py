@@ -188,13 +188,13 @@ class TestClient(unittest.TestCase):
           self.client.ls(foldername="special", stream=stream)
           self.assertEquals(
                [i.strip() for i in stream.getvalue().split('  ') if i.strip() != ''],
-               ['special%s1270028940.V801Ie8c95dM583793' % SEPERATOR, '2010-05-03 04:37:26', 'richard@example.com', '[]', 'Some message from python']
+               ['special%s1270028941.V801Ie8c95dM583793' % SEPERATOR, '2010-05-03 04:37:26', 'richard@example.com', '[]', 'Some message from python']
                )
 
      def test_msgdata(self):
           stream = StringIO()
           self.client.gettext(
-               "testmaildir%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
+               "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
                stream=stream
                )
           msgdata = stream.getvalue()
@@ -210,7 +210,7 @@ class TestClient(unittest.TestCase):
      def test_type(self):
          stream = StringIO()
          self.client.getstruct(
-              "testmaildir%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
+              "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
               stream=stream
               )
          self.assertEquals(
@@ -242,3 +242,4 @@ class TestClient(unittest.TestCase):
 if __name__ == "__main__":
      unittest.main()
 
+# End
