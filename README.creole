@@ -9,9 +9,6 @@ also be a shell) provides stateless access to your mail.
 
 Folders are fully supported.
 
-md is nowhere near complete yet, and not at all usable for most people
-as any kind of mail tool.
-
 Some examples:
 
 {{{
@@ -32,7 +29,7 @@ your solution, you see mine is simple enough to do it in five
 minutes. Well, have fun!
 }}}
 
-
-If you are interested in the approach however, here it is, ready for
-you to hack on.
+md is nowhere near complete yet, and not at all usable for most people
+as any kind of mail tool. If you are interested in the approach
+however, here it is, ready for you to hack on.
 
