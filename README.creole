@@ -1,0 +1,38 @@
+= md - a maildir client and library =
+
+md is a foundation for handling mail directly with maildirs. It allows
+you to circumvent IMAP servers and clients and deal directly with the
+underlying storage.
+
+md is designed to be a little like MH. A command line tool (which can
+also be a shell) provides stateless access to your mail. 
+
+Folders are fully supported.
+
+md is nowhere near complete yet, and not at all usable for most people
+as any kind of mail tool.
+
+Some examples:
+
+{{{
+$ export MAILDIR=~/Maildir
+$ md ls
+INBOX#1278373500.V801Ie8c29aM925471  2010-07-06 01:12:43  <noreply@github.com> [] [GitHub] someone commented on a commit
+INBOX#1278377415.V801Ie8c29bM873637  2010-07-06 02:18:04  <noreply@github.com> [] [GitHub] somebody commented on a commit
+INBOX#1278408713.V801Ie8c328M715195  2010-07-06 10:59:47  <noreply@github.com> [] [GitHub] someoneelse commented on a commit
+
+$ md text INBOX#1278408713.V801Ie8c328M715195
+return-path: <noreply@github.com>
+received: from github.com (fe2.rs.github.com [172.17.1.5])
+	by smtp1.rs.github.com (Postfix) with ESMTPS id 71DF442096
+
+Cool, ok. I see it the same way. If you find a working solution it is
+fine and one learns something by doing it. I didn't want you to change
+your solution, you see mine is simple enough to do it in five
+minutes. Well, have fun!
+}}}
+
+
+If you are interested in the approach however, here it is, ready for
+you to hack on.
+
