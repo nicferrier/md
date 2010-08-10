@@ -40,6 +40,11 @@ import cmdln
 class MdCLI(cmdln.Cmdln):
     name = "md"
 
+    def do_lsfolders(self, subcmd, opts):
+        """List the sub folders of the maildir"""
+        client = MdClient(MAILDIR)
+        client.lsfolders(stream=sys.stdout)
+
     def do_ls(self, subcmd, opts, folder=""):
         """List messages in the specified folder"""
         client = MdClient(MAILDIR)
@@ -76,6 +81,8 @@ class MdCLI(cmdln.Cmdln):
         # TODO fix this because it's broken right now
         shell = MdCLI()
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
+
+        
 
 if __name__ == "__main__":
     mdcli = MdCLI()
