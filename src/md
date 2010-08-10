@@ -30,9 +30,8 @@ from mdlib import *
 
 ## This should be redefined as an option and a thread local
 ## Default value should come from an env var or be ~/Maildir
-HOMEMAILDIR = os.path.join(os.environ["HOME"], "Maildir")
+HOMEMAILDIR = "~/Maildir"
 MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
-mdir = MdFolder(MAILDIR)
 
 # Depends on cmdlin
 import cmdln
@@ -40,19 +39,33 @@ import cmdln
 class MdCLI(cmdln.Cmdln):
     name = "md"
 
+    def get_optparser(self):
+        """Override to allow specification of the maildir"""
+        p = cmdln.Cmdln.get_optparser(self)
+        p.add_option(
+            "-M",
+            "--maildir",
+            action="store",
+            dest="maildir"
+            )
+        return p
+
     def do_lsfolders(self, subcmd, opts):
         """List the sub folders of the maildir"""
-        client = MdClient(MAILDIR)
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
         client.lsfolders(stream=sys.stdout)
 
     def do_ls(self, subcmd, opts, folder=""):
         """List messages in the specified folder"""
-        client = MdClient(MAILDIR)
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
         client.ls(foldername=folder,stream=sys.stdout)
 
     def do_lisp(self, subcmd, opts, folder=""):
         """List messages in the specified folder in JSON format"""
-        client = MdClient(MAILDIR)
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
         client.lisp(foldername=folder,stream=sys.stdout)
 
     def do_make(self, subcmd, opts, path):
@@ -61,27 +74,33 @@ class MdCLI(cmdln.Cmdln):
         If the path is relative then create under MAILDIR
         else create at the absolute location.
         """
-        d = path[0] if path[0][0] == "/" else joinpath(MAILDIR, path[0])
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        d = path[0] if path[0][0] == "/" else joinpath(maildir, path[0])
         os.makedirs(joinpath(d, "cur"))
         os.makedirs(joinpath(d, "new"))
         os.makedirs(joinpath(d, "tmp"))
 
     def do_text(self, subcmd, opts, message):
         """Get the best text part of the specified message"""
-        client = MdClient(MAILDIR)
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
         client.gettext(message, sys.stdout)
 
     def do_struct(self, subcmd, opts, message):
         """Get the structure of the specified message"""
-        client = MdClient(MAILDIR)
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
         client.getstruct(message, sys.stdout)
 
     def do_shell(self, subcmd, opts):
-        """Run a shell for md"""
+        """Run a shell for md.
+
+        The MAILDIR cannot be set with this command except through the
+        environment variable.
+        """
         # TODO fix this because it's broken right now
         shell = MdCLI()
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
-
         
 
 if __name__ == "__main__":
