@@ -33,7 +33,7 @@ minutes. Well, have fun!
 as any kind of mail tool. If you are interested in the approach
 however, here it is, ready for you to hack on.
 
-== Building {{{md}}} ==
+== Building md ==
 
 {{{md}}} requires my [https://github.com/nicferrier/pyproxyfs simple filesystem abstraction library].  
 If you're hacking on {{{md}}} you may want to use 
