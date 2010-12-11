@@ -1,4 +1,4 @@
-= {{{md}}} - a maildir client and library =
+= md - a maildir client and library =
 
 {{{md}}} is a foundation for handling mail directly with maildirs. It allows
 you to circumvent IMAP servers and clients and deal directly with the
