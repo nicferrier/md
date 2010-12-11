@@ -1,10 +1,10 @@
-= md - a maildir client and library =
+= {{{md}}} - a maildir client and library =
 
-md is a foundation for handling mail directly with maildirs. It allows
+{{{md}}} is a foundation for handling mail directly with maildirs. It allows
 you to circumvent IMAP servers and clients and deal directly with the
 underlying storage.
 
-md is designed to be a little like MH. A command line tool (which can
+{{{md}}} is designed to be a little like MH. A command line tool (which can
 also be a shell) provides stateless access to your mail. 
 
 Folders are fully supported.
@@ -29,7 +29,19 @@ your solution, you see mine is simple enough to do it in five
 minutes. Well, have fun!
 }}}
 
-md is nowhere near complete yet, and not at all usable for most people
+{{{md}}} is nowhere near complete yet, and not at all usable for most people
 as any kind of mail tool. If you are interested in the approach
 however, here it is, ready for you to hack on.
 
+== Building {{{md}}} ==
+
+{{{md}}} requires my [https://github.com/nicferrier/pyproxyfs simple filesystem abstraction library].  
+If you're hacking on {{{md}}} you may want to use 
+[https://github.com/nicferrier/veh {{{veh}}}] for building the
+dependancies into a virtualenv. {{{md}}} provides the veh config file for making it work, just do:
+
+{{{
+veh refresh
+}}}
+
+to make sure you have the latest dependancies.
