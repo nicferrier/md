@@ -128,6 +128,10 @@ class TestMaildir(unittest.TestCase):
               self.folder["1270028940.V801Ie8c95dM583793"].is_trashed
               )
 
+     def test_remove(self):
+          del self.folder["1270028940.V801Ie8c95dM583793"]
+          self.assertEquals(self.folder.keys(), [])
+
      def test_folders(self):
          self.assertEquals(
               list(self.folder.folders().__iter__())[0],
@@ -238,6 +242,12 @@ class TestClient(unittest.TestCase):
                msgdata.split("\n")[0],
                'return-path: <someone@example2.com>'
                )
+
+     def test_folder_msg_rm(self):
+          self.client.remove(
+               "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
+               )
+
           
 
 if __name__ == "__main__":

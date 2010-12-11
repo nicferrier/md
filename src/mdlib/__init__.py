@@ -309,6 +309,11 @@ class MdFolder(object):
             e.message = "no such message %s" % key
             raise
 
+    def __delitem__(self, key):
+        """Delete an item from the maildir."""
+        path, host, flags = self._exists(key)
+        self.filesystem.remove(path)
+
     def __iter__(self):
         #pdb.set_trace()
         self._muaprocessnew()
@@ -418,6 +423,11 @@ class MdClient(object):
         """List the subfolders"""
         for f in self.folder.folders():
             print >>stream, f
+
+    def remove(self, msgid):
+        foldername, msgkey = msgid.split(SEPERATOR)
+        folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
+        del folder[msgkey]
 
     def _get(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)

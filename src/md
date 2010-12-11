@@ -80,6 +80,12 @@ class MdCLI(cmdln.Cmdln):
         os.makedirs(joinpath(d, "new"))
         os.makedirs(joinpath(d, "tmp"))
 
+    def do_rm(self, subcmd, opts, message):
+        """Remove the specified message"""
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
+        client.remove(message)
+
     def do_text(self, subcmd, opts, message):
         """Get the best text part of the specified message"""
         maildir = getattr(self.options, "maildir",MAILDIR)
