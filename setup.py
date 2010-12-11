@@ -1,6 +1,6 @@
 #from setuptools import setup
 #from setuptools import find_packages
-from distutils.core import setup
+from setuptools import setup
 
 classifiers = [
     'Development Status :: 3 - Alpha',
@@ -29,6 +29,7 @@ setup(
     platforms = ["unix"],
     packages = ["mdlib"],
     package_dir = {"":"src"},
+    test_suite = "mdlib",
     scripts=['src/md'],
     classifiers =  classifiers
     )
