@@ -252,18 +252,17 @@ class MdFolder(object):
         for filename in files:
             if filename == "":
                 continue
+            curfilename = self._foldername(joinpath("new", filename))
             newfilename = joinpath(
                 self._foldername("cur"),
                 "%s:2,%s" % (filename, "")
                 )
-            self.filesystem.rename(
-                self._foldername(joinpath("new", filename)),
-                newfilename
-                )
+            self.filesystem.rename(curfilename, newfilename)
 
     def _curiter(self):
         """An iterator over the messages in 'cur'"""
-        for filename in self.filesystem.listdir(self._foldername("cur")):
+        foldername = self._foldername("cur")
+        for filename in self.filesystem.listdir(foldername):
             yield joinpath(self._foldername("cur"), filename)
 
     def _exists(self, key):

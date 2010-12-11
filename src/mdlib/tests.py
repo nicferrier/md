@@ -110,8 +110,9 @@ class TestMaildir(unittest.TestCase):
                )
 
      def test_contenttype(self):
+          """Gets a message and checks it's the right content type"""
           self.assertEquals(
-               self.folder["1270028940"].get_content_type(),
+               self.folder["1270028940.V801Ie8c95dM583793"].get_content_type(),
                'text/plain'
                )
 
