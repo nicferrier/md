@@ -37,7 +37,7 @@ however, here it is, ready for you to hack on.
 
 {{{md}}} requires my [[https://github.com/nicferrier/pyproxyfs|simple filesystem abstraction library]].  
 If you're hacking on {{{md}}} you may want to use 
-[[https://github.com/nicferrier/veh|{{{veh}}}]] for building the
+[[https://github.com/nicferrier/veh|veh]] for building the
 dependancies into a virtualenv. {{{md}}} provides the veh config file for making it work, just do:
 
 {{{
