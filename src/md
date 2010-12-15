@@ -84,13 +84,26 @@ class MdCLI(cmdln.Cmdln):
         """Remove the specified message"""
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
-        client.remove(message)
+        try:
+            client.remove(message)
+        except KeyError:
+            return 1
 
     def do_text(self, subcmd, opts, message):
         """Get the best text part of the specified message"""
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
         client.gettext(message, sys.stdout)
+
+    def do_raw(self, subcmd, opts, message):
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
+        client.getraw(message, sys.stdout)
+
+    def do_rawpart(self, subcmd, opts, message):
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
+        client.getrawpart(message, sys.stdout)
 
     def do_struct(self, subcmd, opts, message):
         """Get the structure of the specified message"""

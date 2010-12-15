@@ -452,12 +452,28 @@ class MdClient(object):
                 print >>stream, part.get_payload(decode=True)
                 break
 
+    def getrawpart(self, msgid, stream=sys.stdout):
+        """Get the first part from the message and print it raw.
+        """
+        for hdr, part in self._get(msgid):
+            pl = part.get_payload(decode=True)
+            if pl != None:
+                print >>stream, pl
+                break
+
+    def getraw(self, msgid, stream=sys.stdout):
+        """Get the whole message and print it.
+        """
+        foldername, msgkey = msgid.split(SEPERATOR)
+        folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
+        msg = folder[msgkey]
+        print msg.content
+
     def getstruct(self, msgid, stream=sys.stdout):
         """Get and print the whole message.
         """
         for hdr,part in self._get(msgid):
-            if part.get_content_type() == "text/plain":
-                print >>stream, part.get_content_type()
+            print >>stream, part.get_content_type()
 
 
 # End
