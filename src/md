@@ -48,6 +48,12 @@ class MdCLI(cmdln.Cmdln):
             action="store",
             dest="maildir"
             )
+        p.add_option(
+            "-V",
+            "--verbose",
+            action="store_true",
+            dest="verbose"
+            )
         return p
 
     def do_lsfolders(self, subcmd, opts):
@@ -107,7 +113,68 @@ class MdCLI(cmdln.Cmdln):
         # TODO fix this because it's broken right now
         shell = MdCLI()
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
+
+    def do_pull(self, subcmd, opts, remote_maildir):
+        """Pull the remote maildir into the local maildir.
+        """
+        import mdlib.sshpull 
+        m = re.match(
+            "maildir://(?P<user>[a-zA-Z0-9-]+@)*(?P<hostname>[a-zA-Z0-9.-]+)(?P<path>[a-zA-Z0-9./-]+)",
+            remote_maildir
+            )
+        if not m:
+            print >>sys.stderr, "md pull: the remote maildir url was unrecognized"
+            return
+
+        data = m.groupdict()
+        host = data.get("hostname") \
+            if not data.get("user") \
+            else "%s%s" % (data.get("user"), data.get("hostname"))
+        remote_maildir = data.get("path")
+        local_maildir = getattr(self.options, "maildir",MAILDIR)
+        mdlib.sshpull.pull(
+            host, 
+            remote_maildir, 
+            local_maildir, 
+            verbose=getattr(self.options, "verbose", False)
+            )
+
+    def do_storecheck(self, subcmd, opts):
+        """Checks the store for files that may not be in the maildirs.
+        """
+        from os.path import basename
+        from os.path import dirname
+        from os.path import exists as existspath
+        from os.path import islink
+        from os.path import join as joinpath
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        cur = joinpath(maildir, "cur")
+        new = joinpath(maildir, "new")
+        store = joinpath(maildir, "store")
         
+        found_list = []
+        # Loop through the folders checking that everything maps back to the store
+        for scandir in [cur, new]:
+            for f in os.listdir(scandir):
+                filename = joinpath(scandir, f)
+                try:
+                    assert islink(filename)
+                    store_location = os.readlink(filename)
+                    assert existspath(store_location) and dirname(store_location) == store
+                except AssertionError:
+                    print "%s was not a link into the store" % (
+                        "/".join([
+                                filename.split("/")[-2],
+                                filename.split("/")[-1]
+                                ])
+                        )
+                else:
+                    found_list.append(basename(store_location))
+
+        for storefile in os.listdir(store):
+            if storefile not in found_list:
+                print "%s found in store but not folders" % joinpath("store", storefile)
+
 
 if __name__ == "__main__":
     mdcli = MdCLI()
