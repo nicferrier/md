@@ -64,8 +64,8 @@ class HeaderOnlyParser(HeaderParser):
         feedparser._set_headersonly()
         strbuf = StringIO()
         #mp = mmap.mmap(fp._file.fileno(), 2048, mmap.PROT_READ)
-        for line in fp:
-            #print line
+        while True:
+            line = fp.readline(1000)
             strbuf.write(line)
             if line == "\n":
                 break
@@ -73,7 +73,7 @@ class HeaderOnlyParser(HeaderParser):
         feedparser.feed(data)
         return feedparser.close()
 
-hdr_parser = HeaderOnlyParser()
+_hdr_parser = HeaderOnlyParser()
 
 from pyproxyfs import Filesystem
 OSFILESYSTEM = Filesystem()
@@ -81,21 +81,19 @@ MDMSGPATHRE = "%s/(?P<key>[0-9]+\\.[A-Za-z0-9]+)(\\.(?P<hostname>[.A-Za-z0-9-]+)
 SEPERATOR="#"
 class MdMessage(object):
     def __init__(self, 
-                 messagefd, 
                  key, 
                  filename="", 
                  folder=None, 
                  filesystem=OSFILESYSTEM):
-        try:
-            self.content = messagefd.read()
-        except AttributeError:
-            self.content = ""
+        # This is a cache var for implementing self.content
+        self._content = None
 
-        self.msgobj = hdr_parser.parse(
-            StringIO(self.content), 
-            headersonly=True
-            )
+        # Start by JUST reading the headers
+        with filesystem.open(filename) as hdrs_fd:
+            self.msgobj = _hdr_parser.parse(hdrs_fd, headersonly=True)
+
         self.headers_only = True
+
         self.folder = folder
         self.filename = filename
         self.filesystem = filesystem
@@ -116,18 +114,29 @@ class MdMessage(object):
             except Exception, e:
                 self.time = -1
 
+    def _get_content(self):
+        # self.content is provided by __getattr__ through the cache var self._content
+        return Parser().parse(StringIO(self.content))
+
     def walk(self):
         if self.headers_only:
-            self.msgobj = Parser().parse(StringIO(self.content))
+            self.msgobj = self._get_content()
         return self.msgobj.walk()
 
     def get_content_type(self):
         if self.headers_only:
-            self.msgobj = Parser().parse(StringIO(self.content))
+            self.msgobj = self._get_content()
         return dict(self.msgobj._headers).get("Content_type", "text/plain")
 
     def __getattr__(self, attrname):
         """Implements the get methods for SMTP headers on the embedded message."""
+        if attrname == "content":
+            if not self._content:
+                with self.filesystem.open(self.filename) as msgfd:
+                    self._content = msgfd.read()
+            return self._content
+
+        # Otherwise access the header
         msg = self.__dict__["msgobj"]
         m = self.__dict__["hdrmethodre"].match(attrname)
         if msg and m:
@@ -152,6 +161,7 @@ class MdMessage(object):
 
     def _set_flag(self, flag):
         """Turns the specified flag on"""
+        self.folder._invalidate_cache()
         # TODO::: turn the flag off when it's already on
         def replacer(m):
             return "%s/%s.%s%s" % (
@@ -206,10 +216,18 @@ class MdFolder(object):
         self.is_subfolder = subfolder
         self.filesystem = filesystem
 
+        # Memoization cache
+        self._foldername_cache = {}
+        self._files_cache = {}
+        self._keys_cache = {}
+
     def _foldername(self, additionalpath=""):
-        return joinpath(self.base, self.folder, additionalpath) \
-            if not self.is_subfolder \
-            else joinpath(self.base, ".%s" % self.folder, additionalpath)
+        if not self._foldername_cache.get(additionalpath):
+            fn = joinpath(self.base, self.folder, additionalpath) \
+                if not self.is_subfolder \
+                else joinpath(self.base, ".%s" % self.folder, additionalpath)
+            self._foldername_cache[additionalpath] = fn
+        return self._foldername_cache[additionalpath]
 
     def folders(self):
         """Return an object the holds the folders for this folder.
@@ -219,7 +237,8 @@ class MdFolder(object):
         """
 
         entrys = self.filesystem.listdir(abspath(self._foldername()))
-        just_dirs = [d for d in entrys if re.match("\\..*", d)]
+        regex = re.compile("\\..*")
+        just_dirs = [d for d in entrys if regex.match(d)]
 
         folder = self._foldername()
         filesystem = self.filesystem
@@ -259,52 +278,61 @@ class MdFolder(object):
                 )
             self.filesystem.rename(curfilename, newfilename)
 
+    def _fileslist(self):
+        if not self._files_cache:
+            self._muaprocessnew()
+            foldername = self._foldername("cur")
+            regex = re.compile(MDMSGPATHRE % foldername)
+
+            files = self.filesystem.listdir(foldername)
+            for filename in files:
+                # We could use "%s/%s" here instead of joinpath... it's faster
+                path = joinpath(foldername, filename)
+                m = regex.match(path)
+                if m:
+                    desc = m.groupdict()
+                    key = desc["key"]
+                    msg = MdMessage(
+                        key, 
+                        filename=path, 
+                        folder=self, 
+                        filesystem=self.filesystem
+                        ) 
+                    self._files_cache[path] = desc
+                    self._keys_cache[key] = msg
+
+        return self._files_cache, self._keys_cache
+
+    def _invalidate_cache(self):
+        self._files_cache = {}
+        self._keys_cache = {}
+
+    def _curlist(self):
+        """The list of messages in 'cur'. Memoized"""
+        return self._fileslist()[0].keys()
+
     def _curiter(self):
-        """An iterator over the messages in 'cur'"""
-        foldername = self._foldername("cur")
-        for filename in self.filesystem.listdir(foldername):
-            yield joinpath(self._foldername("cur"), filename)
+        """Just the iter of _curlist"""
+        return self._curlist().__iter__()
 
     def _exists(self, key):
         """Find a key in a particular section
 
         Searches through all the files and looks for matches with a regex.
         """
-        self._muaprocessnew()
-
-        # Flags are the initial letter of the following:
-        # Passed, Replied, Seen, Trashed, Draft, Flagged
-        # Here's a better regex than the one we're using
-        # :(?P<version>[2])(?P<flags>[PRSTDF]*))
-        pattern = "%s/%s(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*" % (
-            self._foldername("cur"),
-            key
-            )
-        regex = re.compile(pattern)
-        files = list(self._curiter())
-        for filename in files:
-            m = regex.match(filename)
-            if m:
-                return (
-                    filename,
-                    m.group(1), # hostname 
-                    m.group(3) if m.group(2) else "" # flags
-                    )
-        raise KeyError("not found %s - %s" % (key, pattern))
+        filecache, keycache = self._fileslist()
+        msg = keycache.get(key, None)
+        if msg:
+            path = msg.filename
+            meta = filecache[path]
+            return path, meta["hostname"], meta.get("flags", "")
+        raise KeyError("not found %s" % key)
             
     def __getitem__(self, key):
         try:
-            # Cache this stuff against key?
-            path, host, flags = self._exists(key)
-            with self.filesystem.open(path) as msgfd:
-                content = msgfd.read()
-                return MdMessage(
-                    StringIO(content), 
-                    key, 
-                    filename=path, 
-                    folder=self, 
-                    filesystem=self.filesystem
-                    ) 
+            keycache = self._fileslist()[1]
+            msgobj = keycache[key]
+            return msgobj
         except KeyError, e:
             e.message = "no such message %s" % key
             raise
@@ -312,24 +340,18 @@ class MdFolder(object):
     def __delitem__(self, key):
         """Delete an item from the maildir."""
         path, host, flags = self._exists(key)
+        self._invalidate_cache()
         self.filesystem.remove(path)
 
     def __iter__(self):
-        #pdb.set_trace()
-        self._muaprocessnew()
-        regex = re.compile(MDMSGPATHRE % (self._foldername("cur")))
-        for filename in self._curiter():
-            m = regex.match(filename)
-            if m:
-                yield m.group("key")
-        return
+        return self._fileslist()[1].__iter__()
 
     def iterkeys(self):
         return self.__iter__()
 
     def iteritems(self):
         for k in self.iterkeys():
-            yield k,self[k]
+            yield k, self[k]
 
     def keys(self):
         return list(self.iterkeys())
@@ -338,7 +360,8 @@ class MdFolder(object):
         return list([self[k] for k in self.iterkeys()])
 
     def items(self):
-        return list(self.iteritems())
+        #return list(self.iteritems())
+        return self._fileslist()[1].items()
 
 def _escape(match_obj):
     if match_obj.group(0) == "\n":
@@ -378,10 +401,12 @@ class MdClient(object):
             if foldername == "INBOX" \
             else self._getfolder(foldername)
 
-        lst = list(folder.iteritems())
-        for key,msg in sorted(lst, key=lambda d: d[1].date):
-            yield folder, key, msg
-        return
+        lst = folder.items()
+        itemlist = [
+            (folder, key, msg)
+            for key,msg in sorted(lst, key=lambda d: d[1].date)
+            ]
+        return itemlist
 
     def ls(self, foldername="INBOX", stream=sys.stdout):
         """Do standard text list of the folder to the stream"""
