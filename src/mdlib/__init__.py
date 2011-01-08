@@ -77,7 +77,7 @@ hdr_parser = HeaderOnlyParser()
 
 from pyproxyfs import Filesystem
 OSFILESYSTEM = Filesystem()
-MDMSGPATHRE = "%s/(?P<key>[0-9]+\\.[A-Za-z0-9]+)\\.(?P<hostname>[.A-Za-z0-9-]+)(:[2],(?P<flags>[PRSTDF]*))*"
+MDMSGPATHRE = "%s/(?P<key>[0-9]+\\.[A-Za-z0-9]+)(\\.(?P<hostname>[.A-Za-z0-9-]+))*(:[2],(?P<flags>[PRSTDF]*))*"
 SEPERATOR="#"
 class MdMessage(object):
     def __init__(self, 
@@ -271,26 +271,26 @@ class MdFolder(object):
         Searches through all the files and looks for matches with a regex.
         """
         self._muaprocessnew()
+
+        # Flags are the initial letter of the following:
+        # Passed, Replied, Seen, Trashed, Draft, Flagged
+        # Here's a better regex than the one we're using
+        # :(?P<version>[2])(?P<flags>[PRSTDF]*))
+        pattern = "%s/%s(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*" % (
+            self._foldername("cur"),
+            key
+            )
+        regex = re.compile(pattern)
         files = list(self._curiter())
         for filename in files:
-            m = re.match(
-                # Flags are the initial letter of the following:
-                # Passed, Replied, Seen, Trashed, Draft, Flagged
-                # Here's a better regex than the one we're using
-                # :(?P<version>[2])(?P<flags>[PRSTDF]*))
-                "%s/%s\\.([.A-Za-z0-9-]+)(:[2],([PRSTDF]*))*" % (
-                    self._foldername("cur"),
-                    key
-                    ),
-                filename
-                )
+            m = regex.match(filename)
             if m:
                 return (
                     filename,
                     m.group(1), # hostname 
                     m.group(3) if m.group(2) else "" # flags
                     )
-        raise KeyError("not found")
+        raise KeyError("not found %s - %s" % (key, pattern))
             
     def __getitem__(self, key):
         try:
@@ -317,11 +317,9 @@ class MdFolder(object):
     def __iter__(self):
         #pdb.set_trace()
         self._muaprocessnew()
+        regex = re.compile(MDMSGPATHRE % (self._foldername("cur")))
         for filename in self._curiter():
-            m = re.match(
-                MDMSGPATHRE % (self._foldername("cur")),
-                filename
-                )
+            m = regex.match(filename)
             if m:
                 yield m.group("key")
         return
