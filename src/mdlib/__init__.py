@@ -427,13 +427,13 @@ class MdClient(object):
             except Exception,e:
                 self.logger.exception("whoops!")
 
-    def lisp(self, foldername="INBOX", stream=sys.stdout):
+    def lisp(self, foldername="INBOX", reverse=False, stream=sys.stdout):
         """Do JSON list of the folder to the stream"""
         def fromval(hdr):
             if hdr:
                 return parseaddr(hdr)
 
-        for folder, mk, m in self._list(foldername):
+        for folder, mk, m in self._list(foldername, reverse):
             try:
                 print >>stream, json.dumps({
                         'folder': folder.folder,
