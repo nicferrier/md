@@ -57,25 +57,38 @@ class MdCLI(cmdln.Cmdln):
         return p
 
     def do_lsfolders(self, subcmd, opts):
-        """List the sub folders of the maildir"""
+        """${cmd_name}: list the sub folders of the maildir
+
+        ${cmd_usage}
+        """
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
         client.lsfolders(stream=sys.stdout)
 
+    @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
     def do_ls(self, subcmd, opts, folder=""):
-        """List messages in the specified folder"""
+        """${cmd_name}: list messages in the specified folder
+
+        ${cmd_usage}
+        ${cmd_option_list}
+        """
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
-        client.ls(foldername=folder,stream=sys.stdout)
+        client.ls(foldername=folder, stream=sys.stdout, reverse=getattr(opts, "reverse", False))
 
     def do_lisp(self, subcmd, opts, folder=""):
-        """List messages in the specified folder in JSON format"""
+        """${cmd_name}: list messages in the specified folder in JSON format
+
+        ${cmd_usage}
+        """
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
         client.lisp(foldername=folder,stream=sys.stdout)
 
     def do_make(self, subcmd, opts, path):
-        """Make a maildir at the specified path.
+        """${cmd_name}: make a maildir at the specified path.
+
+        ${cmd_usage}
 
         If the path is relative then create under MAILDIR
         else create at the absolute location.
@@ -87,25 +100,36 @@ class MdCLI(cmdln.Cmdln):
         os.makedirs(joinpath(d, "tmp"))
 
     def do_rm(self, subcmd, opts, message):
-        """Remove the specified message"""
+        """${cmd_name}: remove the specified message
+
+        ${cmd_usage}
+        """
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
         client.remove(message)
 
     def do_text(self, subcmd, opts, message):
-        """Get the best text part of the specified message"""
+        """${cmd_name}: get the best text part of the specified message
+
+        ${cmd_usage}
+        """
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
         client.gettext(message, sys.stdout)
 
     def do_struct(self, subcmd, opts, message):
-        """Get the structure of the specified message"""
+        """${cmd_name}: get the structure of the specified message
+
+        ${cmd_usage}
+        """
         maildir = getattr(self.options, "maildir",MAILDIR)
         client = MdClient(maildir)
         client.getstruct(message, sys.stdout)
 
     def do_shell(self, subcmd, opts):
-        """Run a shell for md.
+        """${cmd_name}: run a shell for md.
+
+        ${cmd_usage}
 
         The MAILDIR cannot be set with this command except through the
         environment variable.
@@ -115,7 +139,9 @@ class MdCLI(cmdln.Cmdln):
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
 
     def do_pull(self, subcmd, opts, remote_maildir):
-        """Pull the remote maildir into the local maildir.
+        """${cmd_name}: pull the remote maildir into the local maildir.
+
+        ${cmd_usage}
         """
         import mdlib.sshpull 
         m = re.match(
@@ -140,7 +166,7 @@ class MdCLI(cmdln.Cmdln):
             )
 
     def do_storecheck(self, subcmd, opts):
-        """Checks the store for files that may not be in the maildirs.
+        """${cmd_name}: checks the store for files that may not be in the maildirs.
         """
         from os.path import basename
         from os.path import dirname

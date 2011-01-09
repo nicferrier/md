@@ -392,7 +392,7 @@ class MdClient(object):
             )
         return mf
 
-    def _list(self, foldername="INBOX"):
+    def _list(self, foldername="INBOX", reverse=False):
         """Do structured list output.
 
         Sorts the list by date.
@@ -401,16 +401,20 @@ class MdClient(object):
             if foldername == "INBOX" \
             else self._getfolder(foldername)
 
+        def sortcmp(d):
+            try:
+                return d[1].date
+            except:
+                return -1
+
         lst = folder.items()
-        itemlist = [
-            (folder, key, msg)
-            for key,msg in sorted(lst, key=lambda d: d[1].date)
-            ]
+        sorted_lst = sorted(lst, key=sortcmp, reverse=1 if reverse else 0)
+        itemlist = [(folder, key, msg) for key,msg in sorted_lst]
         return itemlist
 
-    def ls(self, foldername="INBOX", stream=sys.stdout):
+    def ls(self, foldername="INBOX", reverse=False, stream=sys.stdout):
         """Do standard text list of the folder to the stream"""
-        for folder, mk, m in self._list(foldername):
+        for folder, mk, m in self._list(foldername, reverse):
             try:
                 # I am very unsure about this defaulting of foldername
                 print >>stream, "% -20s % 20s % 50s  [%s]  %s" % (
