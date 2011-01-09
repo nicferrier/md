@@ -9,7 +9,7 @@ classifiers = [
     'Operating System :: OS Independent',
     'Programming Language :: Python',
     'Topic :: Utilities',
-    'Topic :: Communications:: Email',
+    'Topic :: Communications :: Email',
 ]
 
 # Depends
