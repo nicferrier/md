@@ -204,7 +204,10 @@ class MdCLI(cmdln.Cmdln):
 
 
 if __name__ == "__main__":
-    mdcli = MdCLI()
-    sys.exit(mdcli.main())
+    try:
+        mdcli = MdCLI()
+        sys.exit(mdcli.main())
+    except KeyboardInterrupt:
+        pass
 
 # End

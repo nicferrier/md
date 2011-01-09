@@ -28,6 +28,7 @@ import re
 from os.path import abspath
 from os.path import join as joinpath
 from os.path import split as splitpath
+import errno
 
 import time
 from datetime import datetime
@@ -424,6 +425,11 @@ class MdClient(object):
                     m.get_flags(),
                     re.sub("\n", "", m.get_subject() or "")
                     )
+            except IOError,e:
+                if e.errno == errno.EPIPE:
+                    # Broken pipe we can ignore
+                    return
+                self.logger.exception("whoops!")
             except Exception,e:
                 self.logger.exception("whoops!")
 
