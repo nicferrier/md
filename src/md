@@ -140,10 +140,12 @@ class MdCLI(cmdln.Cmdln):
         shell = MdCLI()
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
 
+    @cmdln.option("-N", "--noop", help="don't actually pull", action="store_true")
     def do_pull(self, subcmd, opts, remote_maildir):
         """${cmd_name}: pull the remote maildir into the local maildir.
 
         ${cmd_usage}
+        ${cmd_option_list}
         """
         import mdlib.sshpull 
         m = re.match(
@@ -164,6 +166,7 @@ class MdCLI(cmdln.Cmdln):
             host, 
             remote_maildir, 
             local_maildir, 
+            noop=getattr(opts, "noop", False),
             verbose=getattr(self.options, "verbose", False)
             )
 
