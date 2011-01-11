@@ -11,8 +11,12 @@
 
 (defvar mdmua-mode-map '())
 
-(defvar md-bin-path "~/md/md.py"
+(defvar mdmua-md-bin-path "md"
   "Where md can be found.")
+
+
+(defvar mdmua-maildir "~/.maildirs/northpole"
+  "Where the maildir can be found.")
 
 ;; Utility functions
 
@@ -50,6 +54,20 @@
 	    (append plist 
 		    (list (mdmua-string-to-plist-symbol (symbol-name (car el)))
 			  (cdr el)))))))
+
+(defun mdmua--command (command &optional buffer)
+  "Run the specified command with mdmua and using the channel as a buffer unless buffer is not nil"
+  (let ((buf (if buffer buffer (get-buffer-create "*mdmua-channel*" )))
+        (proc 
+	 (start-process-shell-command 
+	  "mdmua" 
+          channel-buffer
+          (format "%s -M %s %s" 
+                  mdmua-md-bin-path 
+                  (expand-file-name mdmua-maildir) 
+                  command))))
+    proc))
+
 
 ;; Main program
 
@@ -154,16 +172,22 @@ useful while we're developing mdmua"""
   (interactive (list 
 		(plist-get (text-properties-at (point)) 'key)
 		current-prefix-arg))
-  (let* ((proc 
-	  (start-process-shell-command 
-	   "mdmua" "mdmua-message-channel" md-bin-path "gettext" key)))
-    (with-current-buffer (process-buffer proc)
-      (make-local-variable 'struct)
-      (setq struct
-	   `(:key ,key :no-render ,no-render))
-      )
-    (set-process-sentinel proc 'mdmua-sentinel-gettext)
-    ))
+  (let ((buf (get-buffer-create "mdmua-message-channel"))
+        (let* ((proc 
+                (start-process-shell-command 
+                 "mdmua" 
+                 "mdmua-message-channel")
+                (format "%s -M %s text %s"
+                        mdmua-md-bin-path 
+                        (expand-file-name mdmua-maildir)
+                        key))))
+        (with-current-buffer (process-buffer proc)
+          (make-local-variable 'struct)
+          (setq struct
+                `(:key ,key :no-render ,no-render))
+          )
+        (set-process-sentinel proc 'mdmua-sentinel-gettext)
+        )))
 
 
 ;; Folder funcs
@@ -229,7 +253,7 @@ useful while we're developing mdmua"""
                 ;; TODO:::
                 ;; rewrite md so it can take message lists on stdin
                 ;; then send trashed messages on stdin
-                "mdmua" "mdmua-channel" md-bin-path "trash" message)))
+                "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
           (set-process-sentinel proc 'mdmua-sentinel-trash)
           (with-current-buffer (process-buffer proc)
             (make-local-variable 'trash-info)
@@ -248,7 +272,7 @@ bWhen called interactively the message on the current line."
   (let ((buf (current-buffer))
 	(proc 
 	 (start-process-shell-command 
-	  "mdmua" "mdmua-channel" md-bin-path "trash" message)))
+	  "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
     (set-process-sentinel proc 'mdmua-sentinel-trash)
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'trash-info)
@@ -267,7 +291,7 @@ When called interactively the message on the current line."
   (let ((buf (current-buffer))
 	(proc 
 	 (start-process-shell-command 
-	  "mdmua" "mdmua-channel" md-bin-path "trash" message)))
+	  "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
     (set-process-sentinel proc 'mdmua-sentinel-trash)
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'folder-buffer)
@@ -393,6 +417,7 @@ key.
     (let ((folders 
            (with-current-buffer (process-buffer process)
              (mdmua-util-buffer-lines))))
+      (setq folders (cons "INBOX" folders))
       (mdmua-render folders process))
     ))
   )
@@ -404,9 +429,12 @@ key.
 (defun mdmua-folder-list ()
   "List the messages in a folder."
   (interactive)
-  (let ((proc 
+  (let ((buf (get-buffer-create "*mdmua-folders*"))
+        (proc 
          (start-process-shell-command 
-          "mdmua" "*mdmua-folders*" md-bin-path "folders")))
+          "mdmua" 
+          "*mdmua-folders*"
+          (format "%s -M %s lsfolders"  mdmua-md-bin-path (expand-file-name mdmua-maildir)))))
     (set-process-sentinel proc 'mdmua-sentinel-folders)
     ))
 
@@ -454,13 +482,12 @@ When called interactively this expects to be located on a line with the folder o
 (defun mdmua-list (folder)
   "List the messages in a folder."
   (interactive)
-  (let ((proc 
-	 (start-process-shell-command 
-	  "mdmua" "mdmua-channel" md-bin-path "lisp" folder)))
+  (let ((proc (mdmua--command (format "lisp %s" ))))
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'folder-name)
       (setq folder-name folder))
     (set-process-sentinel proc 'mdmua-sentinel-list)
     ))
+
 
 ;; End
