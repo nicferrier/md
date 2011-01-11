@@ -95,10 +95,11 @@ class MdCLI(cmdln.Cmdln):
         else create at the absolute location.
         """
         maildir = getattr(self.options, "maildir",MAILDIR)
-        d = path[0] if path[0][0] == "/" else joinpath(maildir, path[0])
+        d = path if path[0] == "/" else joinpath(maildir, path)
         os.makedirs(joinpath(d, "cur"))
         os.makedirs(joinpath(d, "new"))
         os.makedirs(joinpath(d, "tmp"))
+        os.makedirs(joinpath(d, "store"))
 
     def do_rm(self, subcmd, opts, message):
         """${cmd_name}: remove the specified message
@@ -139,10 +140,12 @@ class MdCLI(cmdln.Cmdln):
         shell = MdCLI()
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
 
+    @cmdln.option("-N", "--noop", help="don't actually pull", action="store_true")
     def do_pull(self, subcmd, opts, remote_maildir):
         """${cmd_name}: pull the remote maildir into the local maildir.
 
         ${cmd_usage}
+        ${cmd_option_list}
         """
         import mdlib.sshpull 
         m = re.match(
@@ -163,6 +166,7 @@ class MdCLI(cmdln.Cmdln):
             host, 
             remote_maildir, 
             local_maildir, 
+            noop=getattr(opts, "noop", False),
             verbose=getattr(self.options, "verbose", False)
             )
 

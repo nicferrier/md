@@ -39,13 +39,14 @@ class _SSH(object):
 
 from os import listdir
 from os import symlink
+from os.path import abspath
 from os.path import basename
 from os.path import expanduser
 from os.path import exists as existspath
 from os.path import join as joinpath
 import re
 
-def pull(host, maildir, localmaildir, verbose=False):
+def pull(host, maildir, localmaildir, noop=False, verbose=False):
     localstore = expanduser(joinpath(localmaildir, "store"))
     
     # Get the list of mail we already have locally
@@ -60,12 +61,12 @@ def pull(host, maildir, localmaildir, verbose=False):
 
     # This command produces a list of all files in the maildir like:
     #   base-filename timestamp container-directory
-    stdout = np.cmd(
-        """find {maildir} -printf '%f %T@ %h\n' \
-| sed -rne 's|^([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*(.*)|\\1\\6|p'""".format(
-            maildir=maildir
-            )
+    command = """ls -1Ugo --time-style=+%s {maildir}/{{cur,new}} | sed -rne 's|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 {maildir}|p'""".format(
+        maildir=maildir
         )
+    if verbose:
+        print command
+    stdout = np.cmd(command)
     lines = stdout.split("\n")
     maildir_ls = [line.split(" ") for line in lines if len(line.split(" ")) == 3]
 
@@ -86,22 +87,22 @@ def pull(host, maildir, localmaildir, verbose=False):
             else:
                 print "pulling %s %s to %s" % (basefile, container, storefile)
                 stdout = np.cmd("cat %s/%s*" % (container, basefile))
-                with open(storefile, "w") as fd:
-                    fd.write(stdout)
-
-                try:
-                    # Now symlink the store file to the correct location
-                    target = joinpath(
-                        expanduser(localmaildir), 
-                        basename(container), 
-                        basefile
-                        )
-                    symlink(storefile, target)
-                except OSError, e:
-                    if e.errno == 17:
-                        # file exists
-                        pass
-                    else:
-                        print "%s %s %s" % (e, storefile, target)
+                if not noop:
+                    with open(storefile, "w") as fd:
+                        fd.write(stdout)
+                    try:
+                        # Now symlink the store file to the correct location
+                        target = joinpath(
+                            expanduser(localmaildir), 
+                            "new",
+                            basefile
+                            )
+                        symlink(abspath(storefile), target)
+                    except OSError, e:
+                        if e.errno == 17:
+                            # file exists
+                            pass
+                        else:
+                            print "%s %s %s" % (e, storefile, target)
 
 # End
