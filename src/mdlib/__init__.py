@@ -284,11 +284,11 @@ class MdFolder(object):
             self._muaprocessnew()
             foldername = self._foldername("cur")
             regex = re.compile(MDMSGPATHRE % foldername)
-
             files = self.filesystem.listdir(foldername)
             for filename in files:
                 # We could use "%s/%s" here instead of joinpath... it's faster
-                path = joinpath(foldername, filename)
+                # path = joinpath(foldername, filename)
+                path = "%s/%s" % (foldername, filename)
                 m = regex.match(path)
                 if m:
                     desc = m.groupdict()
