@@ -15,8 +15,9 @@
   "Where md can be found.")
 
 
-(defvar mdmua-maildir "~/.maildirs/northpole"
-  "Where the maildir can be found.")
+(defcustom mdmua-maildir "~/.maildirs/nic"
+  "Where the maildir can be found."
+  :group 'md)
 
 ;; Utility functions
 
