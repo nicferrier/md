@@ -161,7 +161,8 @@ class MdCLI(cmdln.Cmdln):
             if not data.get("user") \
             else "%s%s" % (data.get("user"), data.get("hostname"))
         remote_maildir = data.get("path")
-        local_maildir = getattr(self.options, "maildir",MAILDIR)
+
+        local_maildir = getattr(self.options, "maildir", MAILDIR) or MAILDIR
         mdlib.sshpull.pull(
             host, 
             remote_maildir, 
