@@ -65,7 +65,6 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        import pdb ; pdb.set_trace()
         client = MdClient(self.maildir)
         client.lsfolders(stream=sys.stdout)
 
