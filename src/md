@@ -56,13 +56,17 @@ class MdCLI(cmdln.Cmdln):
             )
         return p
 
+    @property
+    def maildir(self):
+        return getattr(self.options, "maildir", MAILDIR) or MAILDIR
+
     def do_lsfolders(self, subcmd, opts):
         """${cmd_name}: list the sub folders of the maildir
 
         ${cmd_usage}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        import pdb ; pdb.set_trace()
+        client = MdClient(self.maildir)
         client.lsfolders(stream=sys.stdout)
 
     @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
@@ -72,8 +76,7 @@ class MdCLI(cmdln.Cmdln):
         ${cmd_usage}
         ${cmd_option_list}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.ls(foldername=folder, stream=sys.stdout, reverse=getattr(opts, "reverse", False))
 
     @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
@@ -82,8 +85,7 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.lisp(foldername=folder,stream=sys.stdout, reverse=getattr(opts, "reverse", False))
 
     def do_make(self, subcmd, opts, path):
@@ -94,8 +96,7 @@ class MdCLI(cmdln.Cmdln):
         If the path is relative then create under MAILDIR
         else create at the absolute location.
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        d = path if path[0] == "/" else joinpath(maildir, path)
+        d = path if path[0] == "/" else joinpath(self.maildir, path)
         os.makedirs(joinpath(d, "cur"))
         os.makedirs(joinpath(d, "new"))
         os.makedirs(joinpath(d, "tmp"))
@@ -106,8 +107,7 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.remove(message)
 
     def do_text(self, subcmd, opts, message):
@@ -115,8 +115,7 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.gettext(message, sys.stdout)
 
     def do_struct(self, subcmd, opts, message):
@@ -124,8 +123,7 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.getstruct(message, sys.stdout)
 
     def do_shell(self, subcmd, opts):
@@ -162,7 +160,7 @@ class MdCLI(cmdln.Cmdln):
             else "%s%s" % (data.get("user"), data.get("hostname"))
         remote_maildir = data.get("path")
 
-        local_maildir = getattr(self.options, "maildir", MAILDIR) or MAILDIR
+        local_maildir = self.maildir
         mdlib.sshpull.pull(
             host, 
             remote_maildir, 
@@ -179,7 +177,7 @@ class MdCLI(cmdln.Cmdln):
         from os.path import exists as existspath
         from os.path import islink
         from os.path import join as joinpath
-        maildir = getattr(self.options, "maildir",MAILDIR)
+        maildir = self.maildir
         cur = joinpath(maildir, "cur")
         new = joinpath(maildir, "new")
         store = joinpath(maildir, "store")
