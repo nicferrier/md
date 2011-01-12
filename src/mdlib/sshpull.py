@@ -61,7 +61,7 @@ def pull(host, maildir, localmaildir, noop=False, verbose=False):
 
     # This command produces a list of all files in the maildir like:
     #   base-filename timestamp container-directory
-    command = """ls -1Ugo --time-style=+%s {maildir}/{{cur,new}} | sed -rne 's|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 {maildir}|p'""".format(
+    command = """echo {maildir}/{{cur,new}} | tr ' ' '\\n' | while read path ; do ls -1Ugo --time-style=+%s $path | sed -rne "s|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 $path|p";done""".format(
         maildir=maildir
         )
     if verbose:
@@ -87,14 +87,14 @@ def pull(host, maildir, localmaildir, noop=False, verbose=False):
             else:
                 print "pulling %s %s to %s" % (basefile, container, storefile)
                 stdout = np.cmd("cat %s/%s*" % (container, basefile))
-                if not noop:
+                if not noop and len(stdout) > 0:
                     with open(storefile, "w") as fd:
                         fd.write(stdout)
                     try:
                         # Now symlink the store file to the correct location
                         target = joinpath(
                             expanduser(localmaildir), 
-                            "new",
+                            basename(container),
                             basefile
                             )
                         symlink(abspath(storefile), target)
