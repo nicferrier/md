@@ -124,6 +124,19 @@ class MdMessage(object):
             self.msgobj = self._get_content()
         return self.msgobj.walk()
 
+    def as_string(self):
+        """Get the underlying message object as a string"""
+        if self.headers_only:
+            self.msgobj = self._get_content()
+
+        # We could just use msgobj.as_string() but this is more flexible... we might need it.
+        from email.generator import Generator
+        fp = StringIO()
+        g = Generator(fp, maxheaderlen=60)
+        g.flatten(self.msgobj)
+        text = fp.getvalue()
+        return text
+
     def get_content_type(self):
         if self.headers_only:
             self.msgobj = self._get_content()
@@ -508,5 +521,12 @@ class MdClient(object):
             if part.get_content_type() == "text/plain":
                 print >>stream, part.get_content_type()
 
+    def get(self, msgid, stream=sys.stdout):
+        foldername, msgkey = msgid.split(SEPERATOR)
+        folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
+        # Now look up the message
+        msg = folder[msgkey]
+        msg.is_seen = True
+        print >>stream, msg.as_string()
 
 # End
