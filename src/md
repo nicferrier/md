@@ -125,6 +125,14 @@ class MdCLI(cmdln.Cmdln):
         client = MdClient(self.maildir)
         client.getstruct(message, sys.stdout)
 
+    def do_file(self, subcmd, opts, message):
+        """${cmd_name}: download the whole file of the message.
+        
+        ${cmd_usage}
+        """
+        client = MdClient(self.maildir)
+        client.get(message, sys.stdout)
+
     def do_shell(self, subcmd, opts):
         """${cmd_name}: run a shell for md.
 
