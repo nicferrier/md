@@ -58,15 +58,15 @@
 
 (defun mdmua--command (command &optional buffer)
   "Run the specified command with mdmua and using the channel as a buffer unless buffer is not nil"
-  (let ((buf (if buffer buffer (get-buffer-create "*mdmua-channel*" )))
-        (proc 
-	 (start-process-shell-command 
-	  "mdmua" 
-          channel-buffer
-          (format "%s -M %s %s" 
-                  mdmua-md-bin-path 
-                  (expand-file-name mdmua-maildir) 
-                  command))))
+  (let* ((buf (if buffer buffer (get-buffer-create "*mdmua-channel*" )))
+         (proc 
+          (start-process-shell-command 
+           "mdmua" 
+           buf
+           (format "%s -M %s %s" 
+                   mdmua-md-bin-path 
+                   (expand-file-name mdmua-maildir) 
+                   command))))
     proc))
 
 
@@ -173,22 +173,15 @@ useful while we're developing mdmua"""
   (interactive (list 
 		(plist-get (text-properties-at (point)) 'key)
 		current-prefix-arg))
-  (let ((buf (get-buffer-create "mdmua-message-channel"))
-        (let* ((proc 
-                (start-process-shell-command 
-                 "mdmua" 
-                 "mdmua-message-channel")
-                (format "%s -M %s text %s"
-                        mdmua-md-bin-path 
-                        (expand-file-name mdmua-maildir)
-                        key))))
-        (with-current-buffer (process-buffer proc)
-          (make-local-variable 'struct)
-          (setq struct
-                `(:key ,key :no-render ,no-render))
-          )
-        (set-process-sentinel proc 'mdmua-sentinel-gettext)
-        )))
+  (let* ((buf (get-buffer-create "mdmua-message-channel"))
+         (proc (mdmua--command (format "text %s" key) buf)))
+    (with-current-buffer (process-buffer proc)
+      (make-local-variable 'struct)
+      (setq struct
+            `(:key ,key :no-render ,no-render))
+      )
+    (set-process-sentinel proc 'mdmua-sentinel-gettext)
+    ))
 
 
 ;; Folder funcs
@@ -472,7 +465,8 @@ When called interactively this expects to be located on a line with the folder o
 		 :messages
 		 (mapcar (lambda (line)
 			   (condition-case nil
-			       (mdmua-alist-to-plist (json-read-from-string line))
+                               (let ((json (json-read-from-string line)))
+                                 (mdmua-alist-to-plist json))
 			     (error nil)
 			     ))
 			 message-lines))
@@ -483,7 +477,7 @@ When called interactively this expects to be located on a line with the folder o
 (defun mdmua-list (folder)
   "List the messages in a folder."
   (interactive)
-  (let ((proc (mdmua--command (format "lisp %s" ))))
+  (let ((proc (mdmua--command (format "lisp %s" (if (equal folder "INBOX") "" folder)))))
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'folder-name)
       (setq folder-name folder))
