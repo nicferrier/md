@@ -101,7 +101,6 @@
       (call-interactively 'mdmua-open-folder)
     (call-interactively 'mdmua-open-message)))
 
-
 ;; Mandling key'd messages
 
 (defun mdmua-pastebuffer-key (key)
@@ -183,6 +182,20 @@ useful while we're developing mdmua"""
     (set-process-sentinel proc 'mdmua-sentinel-gettext)
     ))
 
+(defun mdmua-open-full (key)
+  "Open the whole file of the message"
+  (interactive (list 
+		(plist-get (text-properties-at (point)) 'key)))
+  (let* ((buf (get-buffer-create "mdmua-message-channel"))
+         (proc (mdmua--command (format "file %s" key) buf)))
+    (with-current-buffer (process-buffer proc)
+      (make-local-variable 'struct)
+      (setq struct
+            `(:key ,key :no-render ,nil))
+      )
+    (set-process-sentinel proc 'mdmua-sentinel-gettext)
+    )
+  )
 
 ;; Folder funcs
 
@@ -477,7 +490,7 @@ When called interactively this expects to be located on a line with the folder o
 (defun mdmua-list (folder)
   "List the messages in a folder."
   (interactive)
-  (let ((proc (mdmua--command (format "lisp %s" (if (equal folder "INBOX") "" folder)))))
+  (let ((proc (mdmua--command (format "lisp -r %s" (if (equal folder "INBOX") "" folder)))))
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'folder-name)
       (setq folder-name folder))
