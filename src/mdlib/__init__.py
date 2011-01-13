@@ -538,7 +538,7 @@ class MdClient(object):
             yield hdr,p
         return
 
-    def gettext(self, msgid, stream=sys.stdout, splitter="--text follows this line--"):
+    def gettext(self, msgid, stream=sys.stdout, splitter="--text follows this line--\n"):
         """Get the first text part we can find and print it as a message.
 
         This is a simple cowpath, most of the time you want the first plan part.
