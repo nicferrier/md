@@ -286,21 +286,27 @@ class MdFolder(object):
             regex = re.compile(MDMSGPATHRE % foldername)
             files = self.filesystem.listdir(foldername)
             for filename in files:
-                # We could use "%s/%s" here instead of joinpath... it's faster
-                # path = joinpath(foldername, filename)
-                path = "%s/%s" % (foldername, filename)
-                m = regex.match(path)
-                if m:
-                    desc = m.groupdict()
-                    key = desc["key"]
-                    msg = MdMessage(
-                        key, 
-                        filename=path, 
-                        folder=self, 
-                        filesystem=self.filesystem
-                        ) 
-                    self._files_cache[path] = desc
-                    self._keys_cache[key] = msg
+                try:
+                    # We could use "%s/%s" here instead of joinpath... it's faster
+                    # path = joinpath(foldername, filename)
+                    path = "%s/%s" % (foldername, filename)
+                    m = regex.match(path)
+                    if m:
+                        desc = m.groupdict()
+                        key = desc["key"]
+                        msg = MdMessage(
+                            key, 
+                            filename=path, 
+                            folder=self, 
+                            filesystem=self.filesystem
+                            ) 
+                        self._files_cache[path] = desc
+                        self._keys_cache[key] = msg
+                except IOError:
+                    # A big candidate for this could be you doing 
+                    # one thing in one process (like removing a file)
+                    # and this in another
+                    pass
 
         return self._files_cache, self._keys_cache
 
@@ -442,14 +448,19 @@ class MdClient(object):
         for folder, mk, m in self._list(foldername, reverse):
             try:
                 print >>stream, json.dumps({
-                        'folder': folder.folder,
-                        'key': "%s%s%s" % (folder.folder, SEPERATOR, mk),
+                        'folder': folder.folder or foldername or "INBOX",
+                        'key': "%s%s%s" % (folder.folder or foldername or "INBOX", SEPERATOR, mk),
                         'date':  str(m.date),
                         "flags": m.get_flags(),
                         'from': fromval(m.get_from()),
                         'subject': re.sub("\n|\'|\"", _escape, m.get_subject() or "")
                         })
-            except Exception, e:
+            except IOError,e:
+                if e.errno == errno.EPIPE:
+                    # Broken pipe we can ignore
+                    return
+                self.logger.exception("whoops!")
+            except Exception,e:
                 self.logger.exception("whoops!")
 
     def lsfolders(self, stream=sys.stdout):
@@ -473,15 +484,20 @@ class MdClient(object):
             yield hdr,p
         return
 
-    def gettext(self, msgid, stream=sys.stdout):
+    def gettext(self, msgid, stream=sys.stdout, splitter="--text follows this line--"):
         """Get the first text part we can find and print it as a message.
 
         This is a simple cowpath, most of the time you want the first plan part.
+
+        'msgid' is the message to be used
+        'stream' is printed to with the header, splitter, first-textpart
+        'splitter' is text used to split the header from the body
         """
         for hdr,part in self._get(msgid):
             if part.get_content_type() == "text/plain":
                 for hdr,val in hdr:
                     print >>stream, "%s: %s" % (hdr,val)
+                print >>stream, splitter
                 print >>stream, part.get_payload(decode=True)
                 break
 
