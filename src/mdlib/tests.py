@@ -93,10 +93,11 @@ class TestMaildir(unittest.TestCase):
          #     )
 
      def test_items(self):
-         self.assertEquals(
-              [(i[0],i[1].content.split("\n")[0]) for i in self.folder.items()],
-              [('1270028940.V801Ie8c95dM583793', 'Return-Path: <someone@example1.com>')]
-              )
+          lst = self.folder.items()
+          self.assertEquals(
+               [(name,msg.content.split("\n")[0]) for name,msg in lst],
+               [('1270028940.V801Ie8c95dM583793', 'Return-Path: <someone@example1.com>')]
+               )
 
      def test_values(self):
           self.assertEquals(

@@ -218,6 +218,52 @@ class MdMessage(object):
             self.key
             )
 
+class _KeysCache(object):
+    """A means of making the parsing of the messages lazy.
+
+    It has to be lazy so we don't have to parse the entire folder when
+    we only want to display a message.
+    """
+    def __init__(self):
+        self.store = {}
+
+    def __setitem__(self, key, o):
+        self.store[key] = o
+
+    def get(self, key, default):
+        try:
+            return self.__getitem__(key)
+        except KeyError:
+            return default
+
+    def __getitem__(self, key):
+        stored = self.store[key]
+        if isinstance(stored, dict):
+            filename = stored["path"]
+            folder = stored["folder"]
+            stored = MdMessage(
+                key, 
+                filename = filename, 
+                folder = folder,
+                filesystem = folder.filesystem
+                )
+            self.store[key] = stored
+        return stored
+
+    def __iter__(self):
+        """just the keys iterator"""
+        return self.store.__iter__()
+
+    def iteritems(self):
+        for n in self.store.__iter__():
+            v = self.__getitem__(n)
+            yield n,v
+        return
+
+    def items(self):
+        return list(self.iteritems())
+            
+
 class MdFolder(object):
     """A Maildir folder.
 
@@ -233,7 +279,7 @@ class MdFolder(object):
         # Memoization cache
         self._foldername_cache = {}
         self._files_cache = {}
-        self._keys_cache = {}
+        self._keys_cache = _KeysCache()
 
     def _foldername(self, additionalpath=""):
         if not self._foldername_cache.get(additionalpath):
@@ -307,14 +353,8 @@ class MdFolder(object):
                     if m:
                         desc = m.groupdict()
                         key = desc["key"]
-                        msg = MdMessage(
-                            key, 
-                            filename=path, 
-                            folder=self, 
-                            filesystem=self.filesystem
-                            ) 
                         self._files_cache[path] = desc
-                        self._keys_cache[key] = msg
+                        self._keys_cache[key] = {"path": path, "folder": self}
                 except IOError:
                     # A big candidate for this could be you doing 
                     # one thing in one process (like removing a file)
@@ -325,7 +365,7 @@ class MdFolder(object):
 
     def _invalidate_cache(self):
         self._files_cache = {}
-        self._keys_cache = {}
+        self._keys_cache = _KeysCache()
 
     def _curlist(self):
         """The list of messages in 'cur'. Memoized"""
@@ -350,7 +390,7 @@ class MdFolder(object):
             
     def __getitem__(self, key):
         try:
-            keycache = self._fileslist()[1]
+            filestore, keycache = self._fileslist()
             msgobj = keycache[key]
             return msgobj
         except KeyError, e:
@@ -364,7 +404,8 @@ class MdFolder(object):
         self.filesystem.remove(path)
 
     def __iter__(self):
-        return self._fileslist()[1].__iter__()
+        filestore, keystore = self._fileslist()
+        return keystore.__iter__()
 
     def iterkeys(self):
         return self.__iter__()
@@ -380,8 +421,8 @@ class MdFolder(object):
         return list([self[k] for k in self.iterkeys()])
 
     def items(self):
-        #return list(self.iteritems())
-        return self._fileslist()[1].items()
+        filestore, keystore = self._fileslist()
+        return keystore.items()
 
 def _escape(match_obj):
     if match_obj.group(0) == "\n":
