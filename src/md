@@ -36,6 +36,7 @@ MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
 # Depends on cmdlin
 import cmdln
 
+
 class MdCLI(cmdln.Cmdln):
     name = "md"
 
@@ -69,23 +70,50 @@ class MdCLI(cmdln.Cmdln):
         client.lsfolders(stream=sys.stdout)
 
     @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
+    @cmdln.option(
+        "-s", 
+        "--since", 
+        help="""only list the mails since this timestamp""", 
+        action="store",
+        default=-1
+        )
     def do_ls(self, subcmd, opts, folder=""):
         """${cmd_name}: list messages in the specified folder
 
         ${cmd_usage}
         ${cmd_option_list}
+        SINCE can be used with epoch times, for example: 
+
+          md ls -s $(date '+%s')
         """
         client = MdClient(self.maildir)
-        client.ls(foldername=folder, stream=sys.stdout, reverse=getattr(opts, "reverse", False))
+        client.ls(
+            foldername=folder, 
+            stream=sys.stdout, 
+            reverse=getattr(opts, "reverse", False),
+            since=float(getattr(opts, "since", -1))
+            )
 
     @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
+    @cmdln.option(
+        "-s", 
+        "--since", 
+        help="""only list the mails since this timestamp""", 
+        action="store",
+        default=-1
+        )
     def do_lisp(self, subcmd, opts, folder=""):
         """${cmd_name}: list messages in the specified folder in JSON format
 
         ${cmd_usage}
         """
         client = MdClient(self.maildir)
-        client.lisp(foldername=folder,stream=sys.stdout, reverse=getattr(opts, "reverse", False))
+        client.lisp(
+            foldername=folder,
+            stream=sys.stdout, 
+            reverse=getattr(opts, "reverse", False),
+            since=float(getattr(opts, "since", -1))
+            )
 
     def do_make(self, subcmd, opts, path):
         """${cmd_name}: make a maildir at the specified path.

@@ -25,6 +25,7 @@ __version__ = "0.1"
 
 import sys
 import re
+from os import stat
 from os.path import abspath
 from os.path import join as joinpath
 from os.path import split as splitpath
@@ -237,10 +238,30 @@ class _KeysCache(object):
             return default
 
     def __getitem__(self, key):
+        return self._get_message(key)
+
+    def _get_message(self, key, since=None):
+        """Return the MdMessage object for the key.
+
+        The object is either returned from the cache in the store or
+        made, cached and then returned.
+
+        If 'since' is passed in the modification time of the file is
+        checked and the message is only returned if the mtime is since
+        the specified time. 
+
+        If the 'since' check fails, None is returned.
+
+        'since' must be seconds since epoch.
+        """
         stored = self.store[key]
         if isinstance(stored, dict):
             filename = stored["path"]
             folder = stored["folder"]
+            if since > 0.0:
+                st = stat(filename)
+                if st.st_mtime < since:
+                    return None
             stored = MdMessage(
                 key, 
                 filename = filename, 
@@ -248,6 +269,12 @@ class _KeysCache(object):
                 filesystem = folder.filesystem
                 )
             self.store[key] = stored
+        else:
+            if since > 0.0:
+                st = stat(stored.filename)
+                if st.st_mtime < since:
+                    return None
+                
         return stored
 
     def __iter__(self):
@@ -256,12 +283,23 @@ class _KeysCache(object):
 
     def iteritems(self):
         for n in self.store.__iter__():
-            v = self.__getitem__(n)
+            v = self._get_message(n)
             yield n,v
+        return
+
+    def iteritems_since(self, since=None):
+        for n in self.store.__iter__():
+            v = self._get_message(n, since=since)
+            if v:
+                #print "%s %s %s" % (since,n,stat(v.filename).st_mtime)
+                yield n,v
         return
 
     def items(self):
         return list(self.iteritems())
+
+    def items_since(self, since=None):
+        return list(self.iteritems_since(since=since))
             
 
 class MdFolder(object):
@@ -424,6 +462,11 @@ class MdFolder(object):
         filestore, keystore = self._fileslist()
         return keystore.items()
 
+    def items_since(self, since=None):
+        filestore, keystore = self._fileslist()
+        items = keystore.items_since(since=since)
+        return items
+
 def _escape(match_obj):
     if match_obj.group(0) == "\n":
        return ""
@@ -453,10 +496,10 @@ class MdClient(object):
             )
         return mf
 
-    def _list(self, foldername="INBOX", reverse=False):
+    def _list(self, foldername="INBOX", reverse=False, since=None):
         """Do structured list output.
 
-        Sorts the list by date.
+        Sorts the list by date, possibly reversed, filtered from 'since'.
         """
         folder = self.folder \
             if foldername == "INBOX" \
@@ -468,14 +511,18 @@ class MdClient(object):
             except:
                 return -1
 
-        lst = folder.items()
+        lst = folder.items() if not since else folder.items_since(since)
         sorted_lst = sorted(lst, key=sortcmp, reverse=1 if reverse else 0)
         itemlist = [(folder, key, msg) for key,msg in sorted_lst]
         return itemlist
 
-    def ls(self, foldername="INBOX", reverse=False, stream=sys.stdout):
-        """Do standard text list of the folder to the stream"""
-        for folder, mk, m in self._list(foldername, reverse):
+    def ls(self, foldername="INBOX", reverse=False, since=None, stream=sys.stdout):
+        """Do standard text list of the folder to the stream.
+
+        'since' allows the listing to be date filtered since that
+        date. It should be a float, a time since epoch.
+        """
+        for folder, mk, m in self._list(foldername, reverse, since):
             try:
                 # I am very unsure about this defaulting of foldername
                 print >>stream, "% -20s % 20s % 50s  [%s]  %s" % (
@@ -493,13 +540,17 @@ class MdClient(object):
             except Exception,e:
                 self.logger.exception("whoops!")
 
-    def lisp(self, foldername="INBOX", reverse=False, stream=sys.stdout):
-        """Do JSON list of the folder to the stream"""
+    def lisp(self, foldername="INBOX", reverse=False, since=None, stream=sys.stdout):
+        """Do JSON list of the folder to the stream.
+
+        'since' allows the listing to be date filtered since that
+        date. It should be a float, a time since epoch.
+        """
         def fromval(hdr):
             if hdr:
                 return parseaddr(hdr)
 
-        for folder, mk, m in self._list(foldername, reverse):
+        for folder, mk, m in self._list(foldername, reverse, since):
             try:
                 print >>stream, json.dumps({
                         'folder': folder.folder or foldername or "INBOX",
