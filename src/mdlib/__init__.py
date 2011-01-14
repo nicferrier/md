@@ -53,6 +53,7 @@ logger = logging.getLogger("mdlib")
 logging.basicConfig()
 
 folderlist = {}
+import mmap
 
 class HeaderOnlyParser(HeaderParser):
     """JUST parse the header
@@ -63,15 +64,14 @@ class HeaderOnlyParser(HeaderParser):
         """Create a message structure from the data in a file."""
         feedparser = FeedParser(self._class)
         feedparser._set_headersonly()
-        strbuf = StringIO()
-        #mp = mmap.mmap(fp._file.fileno(), 2048, mmap.PROT_READ)
+        mp = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
+        data = ""
         while True:
-            line = fp.readline(1000)
-            strbuf.write(line)
+            line = mp.readline()
+            data = data + line
             if line == "\n":
                 break
-        data = strbuf.getvalue()
-        feedparser.feed(data)
+        feedparser.feed(data) # mp[0:5000])
         return feedparser.close()
 
 _hdr_parser = HeaderOnlyParser()
