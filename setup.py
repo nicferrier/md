@@ -17,7 +17,7 @@ classifiers = [
 # cmdln
 setup(
     name = "md",
-    version = "0.53",
+    version = "0.54",
     description = "Maildir command line mail client and library",
     long_description = """A command line tool and shell to allow use of
  a maildir directly. Fully fledged MUAs should be trivial to build on top of this.""",
