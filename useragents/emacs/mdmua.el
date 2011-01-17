@@ -128,7 +128,7 @@
 
 
 ;; Message funcs
-
+(require 'qp)
 (defun mdmua-message-display (details)
   "Actually displays a message part.
 
@@ -137,17 +137,20 @@ details is a props list
 :key being the key"
   (switch-to-buffer (get-buffer-create (plist-get details :key)))
   (buffer-disable-undo)
-  (insert (plist-get details :text))
   (if (not (plist-get details :no-render))
-      (message-mode)
-    (message-sort-headers)
-    (local-set-key "\C-ca" 'message-reply))
+      (let ((content (plist-get details :text)))
+        (auto-fill-mode 1)
+        (insert 
+         (quoted-printable-decode-string
+          (replace-regexp-in-string "\r" "" content)))    
+        (message-mode)
+        (local-set-key "\C-ca" 'message-reply)
+        (message-sort-headers)))
   (beginning-of-buffer)
   (setq buffer-read-only 't)
-  (set-buffer-modified-p nil)
-  )
+  (set-buffer-modified-p nil))
 
-(defun mdmua-sentinel-gettext (process signal)
+(defun mdmua--sentinel-gettext (process signal)
   (cond
    ((equal signal "finished\n")
     (mdmua-message-display 
@@ -179,7 +182,7 @@ useful while we're developing mdmua"""
       (setq struct
             `(:key ,key :no-render ,no-render))
       )
-    (set-process-sentinel proc 'mdmua-sentinel-gettext)
+    (set-process-sentinel proc 'mdmua--sentinel-gettext)
     ))
 
 (defun mdmua-open-full (key)
@@ -193,7 +196,7 @@ useful while we're developing mdmua"""
       (setq struct
             `(:key ,key :no-render ,nil))
       )
-    (set-process-sentinel proc 'mdmua-sentinel-gettext)
+    (set-process-sentinel proc 'mdmua--sentinel-gettext)
     )
   )
 
@@ -213,7 +216,7 @@ useful while we're developing mdmua"""
                   face (foreground-color . "green")))))))
 
 
-(defun mdmua-sentinel-trash (proc signal)
+(defun mdmua--sentinel-trash (proc signal)
   (cond
    ((equal signal "finished\n")
     ;; Get the message from the folder buffer's message store
@@ -261,7 +264,7 @@ useful while we're developing mdmua"""
                 ;; rewrite md so it can take message lists on stdin
                 ;; then send trashed messages on stdin
                 "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
-          (set-process-sentinel proc 'mdmua-sentinel-trash)
+          (set-process-sentinel proc 'mdmua--sentinel-trash)
           (with-current-buffer (process-buffer proc)
             (make-local-variable 'trash-info)
             (seq trash-info `(:folder-buffer ,buf
@@ -295,10 +298,11 @@ When called interactively the message on the current line."
   (interactive (list 
 		(plist-get (text-properties-at (point)) 'key)
 		(plist-get (text-properties-at (point)) 'folder)))
-  (let ((buf (current-buffer))
-	(proc 
-	 (start-process-shell-command 
-	  "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
+  (let* ((buf (get-buffer-create "mdmua-message-channel"))
+         (proc (mdmua--command 
+                (format "lisp -r %s" (if (equal folder "INBOX") "" folder))
+                buf
+                )))
     (set-process-sentinel proc 'mdmua-sentinel-trash)
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'folder-buffer)
@@ -403,7 +407,8 @@ key.
 		     (if (plist-get (cdr folder-obj) :open)
 			 (progn
 			   (mapc (lambda (msg)
-				   (insert (mdmua-message-render msg)))
+                                   (if (plist-get msg :key)
+                                       (insert (mdmua-message-render msg))))
 				 (plist-get (cdr folder-obj) :messages))
 			   `(,folder-name 
 			     . (:open 't :messages ,(plist-get (cdr folder-obj) :messages))))
@@ -415,7 +420,7 @@ key.
     (if process
 	(kill-buffer (process-buffer process))))
 
-(defun mdmua-sentinel-folders (process signal)
+(defun mdmua--sentinel-folders (process signal)
   (cond
    ((equal signal "finished\n")
     ;; we need to read the lines in the buffer and put them into the 
@@ -442,7 +447,7 @@ key.
           "mdmua" 
           "*mdmua-folders*"
           (format "%s -M %s lsfolders"  mdmua-md-bin-path (expand-file-name mdmua-maildir)))))
-    (set-process-sentinel proc 'mdmua-sentinel-folders)
+    (set-process-sentinel proc 'mdmua--sentinel-folders)
     ))
 
 (defun mdmua-close-folder (folder-name)
@@ -461,7 +466,7 @@ When called interactively this expects to be located on a line with the folder o
 	(call-interactively 'mdmua-close-folder)
       (mdmua-list folder-name))))
 
-(defun mdmua-sentinel-list (process signal)
+(defun mdmua--sentinel-list (process signal)
   (cond
    ((equal signal "finished\n")
     ;; We need to read the lines in the buffer and put them into the 
@@ -494,7 +499,7 @@ When called interactively this expects to be located on a line with the folder o
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'folder-name)
       (setq folder-name folder))
-    (set-process-sentinel proc 'mdmua-sentinel-list)
+    (set-process-sentinel proc 'mdmua--sentinel-list)
     ))
 
 
