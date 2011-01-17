@@ -603,7 +603,8 @@ class MdClient(object):
                 for name,val in hdr:
                     # Use the subtype, since we're printing just that - tidy it up first
                     if name.lower() == "content-type":
-                        val = " ".join([l.strip() for l in part["content-type"].split("\n")])
+                        val = part["content-type"]
+                    val = " ".join([l.strip() for l in val.split("\n")])
                     print >>stream, "%s: %s" % (name,val)
                 print >>stream, splitter
                 print >>stream, part.get_payload(decode=True)
