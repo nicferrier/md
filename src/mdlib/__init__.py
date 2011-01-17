@@ -592,16 +592,19 @@ class MdClient(object):
     def gettext(self, msgid, stream=sys.stdout, splitter="--text follows this line--\n"):
         """Get the first text part we can find and print it as a message.
 
-        This is a simple cowpath, most of the time you want the first plan part.
+        This is a simple cowpath, most of the time you want the first plain part.
 
         'msgid' is the message to be used
         'stream' is printed to with the header, splitter, first-textpart
-        'splitter' is text used to split the header from the body
+        'splitter' is text used to split the header from the body, Emacs uses this
         """
         for hdr,part in self._get(msgid):
             if part.get_content_type() == "text/plain":
-                for hdr,val in hdr:
-                    print >>stream, "%s: %s" % (hdr,val)
+                for name,val in hdr:
+                    # Use the subtype, since we're printing just that - tidy it up first
+                    if name.lower() == "content-type":
+                        val = " ".join([l.strip() for l in part["content-type"].split("\n")])
+                    print >>stream, "%s: %s" % (name,val)
                 print >>stream, splitter
                 print >>stream, part.get_payload(decode=True)
                 break
