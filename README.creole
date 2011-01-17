@@ -45,3 +45,23 @@ veh refresh
 }}}
 
 to make sure you have the latest dependancies.
+
+== Pulling mail into a maildir ==
+
+md provides a method for pulling mail from a remote
+host. Unfortunately, right now, it only works over ssh so you must
+have an account on the remote host where your mail arrives.
+
+Of course, you could also use pop3 or some such.
+
+
+== A list of things we may do ==
+
+Better mail pulling: I would like to be able to pull mail from remote
+servers over a variety of methods. Mostly the commands are there and
+just need to be integrated with md. For example, a POP3 or IMAP4 pull
+would be relatively simple.
+
+Built in filtering: I would like to add a find command to md analagous
+to UNIX find. Similar searching and filtering options may be added to
+ls.
