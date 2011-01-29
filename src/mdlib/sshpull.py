@@ -46,6 +46,32 @@ from os.path import exists as existspath
 from os.path import join as joinpath
 import re
 
+def _list_remote(sshcon, maildir, verbose=False):
+    """List the remote maildir.
+
+    This is a generator for a reason. Because of the way ssh
+    multi-mastering works a single open TCP connection allows multiple
+    virtual ssh connections. So the encryption and tcp only has to be
+    done once.
+
+    If this command returned a list then the ssh list command would
+    have finished and the ssh connection for each message would have
+    to be made again.
+    """
+    # This command produces a list of all files in the maildir like:
+    #   base-filename timestamp container-directory
+    command = """echo {maildir}/{{cur,new}} | tr ' ' '\\n' | while read path ; do ls -1Ugo --time-style=+%s $path | sed -rne "s|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 $path|p";done""".format(
+        maildir=maildir
+        )
+    if verbose:
+        print command
+    stdout = sshcon.cmd(command)
+    lines = stdout.split("\n")
+    for line in lines:
+        parts = line.split(" ")
+        if len(parts) == 3:
+            yield parts
+    
 def pull(host, maildir, localmaildir, noop=False, verbose=False):
     localstore = expanduser(joinpath(localmaildir, "store"))
     
@@ -59,23 +85,8 @@ def pull(host, maildir, localmaildir, noop=False, verbose=False):
     # Make the ssh connection
     np = _SSH(host)
 
-    # This command produces a list of all files in the maildir like:
-    #   base-filename timestamp container-directory
-    command = """echo {maildir}/{{cur,new}} | tr ' ' '\\n' | while read path ; do ls -1Ugo --time-style=+%s $path | sed -rne "s|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 $path|p";done""".format(
-        maildir=maildir
-        )
-    if verbose:
-        print command
-    stdout = np.cmd(command)
-    lines = stdout.split("\n")
-    maildir_ls = [line.split(" ") for line in lines if len(line.split(" ")) == 3]
-
-    # If we get problems with not finding files in the local list it can help to dump the local list
-    #with open("/tmp/mdlog", "w") as fd:
-    #    print >>fd, "\n".join(localfiles)
-        
     # Loop through the remote files checking the local copies
-    for basefile, timestamp, container in maildir_ls:
+    for basefile, timestamp, container in _list_remote(np, maildir, verbose=verbose):
         if basefile in localfiles:
             if verbose:
                 print "found %s" % basefile
