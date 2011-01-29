@@ -116,4 +116,10 @@ def pull(host, maildir, localmaildir, noop=False, verbose=False):
                         else:
                             print "%s %s %s" % (e, storefile, target)
 
+
+def local(source, localmaildir, noop=False, verbose=False):
+    """Import maildir from source to localmaildir
+    """
+    pass
+
 # End
