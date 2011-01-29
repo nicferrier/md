@@ -141,8 +141,12 @@ details is a props list
       (let ((content (plist-get details :text)))
         (auto-fill-mode 1)
         (insert 
-         (quoted-printable-decode-string
-          (replace-regexp-in-string "\r" "" content)))    
+         (quoted-printable-decode-string content))
+        (save-excursion
+          (beginning-of-buffer)
+          (search-forward "--text follows this line--\n" (point-max) 't)
+          ;;(fill-region (point) (point-max))
+          )
         (message-mode)
         (local-set-key "\C-ca" 'message-reply)
         (message-sort-headers)))
@@ -283,36 +287,13 @@ bWhen called interactively the message on the current line."
 	(proc 
 	 (start-process-shell-command 
 	  "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
-    (set-process-sentinel proc 'mdmua-sentinel-trash)
+    (set-process-sentinel proc 'mdmua--sentinel-trash)
     (with-current-buffer (process-buffer proc)
       (make-local-variable 'trash-info)
-      (seq trash-info `(:folder-buffer ,buf
+      (setq trash-info `(:folder-buffer ,buf
 				       :message-key ,message 
 				       :folder-name ,folder)))
     ))
-
-(defun mdmua-trash-message (message folder)
-  "Delete the specified messages
-
-When called interactively the message on the current line."
-  (interactive (list 
-		(plist-get (text-properties-at (point)) 'key)
-		(plist-get (text-properties-at (point)) 'folder)))
-  (let* ((buf (get-buffer-create "mdmua-message-channel"))
-         (proc (mdmua--command 
-                (format "lisp -r %s" (if (equal folder "INBOX") "" folder))
-                buf
-                )))
-    (set-process-sentinel proc 'mdmua-sentinel-trash)
-    (with-current-buffer (process-buffer proc)
-      (make-local-variable 'folder-buffer)
-      (make-local-variable 'folder-name)
-      (make-local-variable 'message-key)
-      (setq folder-buffer buf)
-      (setq folder-name folder)
-      (setq message-key message))
-    ))
-
   
 (defun mdmua-prev-folder()
   (interactive)
@@ -501,6 +482,7 @@ When called interactively this expects to be located on a line with the folder o
       (setq folder-name folder))
     (set-process-sentinel proc 'mdmua--sentinel-list)
     ))
+
 
 
 ;; End
