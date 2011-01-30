@@ -65,7 +65,12 @@ class HeaderOnlyParser(HeaderParser):
         """Create a message structure from the data in a file."""
         feedparser = FeedParser(self._class)
         feedparser._set_headersonly()
-        mp = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
+
+        try:
+            mp = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
+        except:
+            mp = fp
+
         data = ""
         while True:
             line = mp.readline()
