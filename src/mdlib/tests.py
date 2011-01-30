@@ -249,6 +249,19 @@ class TestClient(unittest.TestCase):
                "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
                )
 
+
+import filterprocessor
+class TestFilter(unittest.TestCase):
+     """Test that our simple filtering all works."""
+     def setUp(self):
+          self.rules = StringIO(filterprocessor.RULES)
+
+     def test_parse(self):
+          """Test that basic parsing works"""
+          rules_list = filterprocessor.parse(self.rules)
+          self.assert_(rules_list[-1].pattern == "/somepath", "%r" % rules_list[-1].pattern)
+          self.assert_(rules_list[-1].field == "subject", "%r" % rules_list[-1].field)
+          self.assert_(rules_list[-1].command == "rm", "%r" % rules_list[-1].command)
           
 
 if __name__ == "__main__":
