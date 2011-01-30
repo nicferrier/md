@@ -173,36 +173,48 @@ class MdCLI(cmdln.Cmdln):
         shell = MdCLI()
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
 
-    @cmdln.option("-N", "--noop", help="don't actually pull", action="store_true")
+    @cmdln.option("-N", "--noop", help="do not pull", action="store_true")
     def do_pull(self, subcmd, opts, remote_maildir):
         """${cmd_name}: pull the remote maildir into the local maildir.
 
         ${cmd_usage}
         ${cmd_option_list}
+
+        The REMOTE_MAILDIR is a url which specifies where the dir
+        is. A few different forms are supported:
+
+          ssh://user@hostname/path   is a remote directory at path, accessed via ssh
+          file://path                is a local maildir directory at path
         """
-        import mdlib.sshpull 
+        import mdlib.pull 
         m = re.match(
-            "maildir://(?P<user>[a-zA-Z0-9-]+@)*(?P<hostname>[a-zA-Z0-9.-]+)(?P<path>[a-zA-Z0-9./-]+)",
+            "(?P<protocol>[a-z]+)://(?P<urlpart>.*)",
             remote_maildir
             )
         if not m:
             print >>sys.stderr, "md pull: the remote maildir url was unrecognized"
             return
 
-        data = m.groupdict()
-        host = data.get("hostname") \
-            if not data.get("user") \
-            else "%s%s" % (data.get("user"), data.get("hostname"))
-        remote_maildir = data.get("path")
-
         local_maildir = self.maildir
-        mdlib.sshpull.pull(
-            host, 
-            remote_maildir, 
-            local_maildir, 
-            noop=getattr(opts, "noop", False),
-            verbose=getattr(self.options, "verbose", False)
-            )
+        noop = getattr(opts, "noop", False) or False
+        verbose = getattr(self.options, "verbose", False) or False
+
+        data = m.groupdict()
+        if data.get("protocol") == "ssh":
+            data = re.match(
+                "(?P<user>[a-zA-Z0-9-]+@)*(?P<hostname>[a-zA-Z0-9.-]+)(?P<path>[a-zA-Z0-9./-]+)",
+                data.get("urlpart")
+                )
+            host = data.get("hostname") \
+                if not data.get("user") \
+                else "%s%s" % (data.get("user"), data.get("hostname"))
+            remote_maildir = data.get("path")
+            mdlib.pull.sshpull(host, remote_maildir, local_maildir, noop, verbose)
+        elif data.get("protocol") == "file":
+            maildir = data.get("urlpart")
+            mdlib.pull.filepull(maildir, local_maildir, noop, verbose)
+        else:
+            print "%s not a recognized protocol" % protocol
 
     def do_storecheck(self, subcmd, opts):
         """${cmd_name}: checks the store for files that may not be in the maildirs.
