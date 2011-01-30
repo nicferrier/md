@@ -360,6 +360,16 @@ class MdFolder(object):
         f = FolderList()
         return f
 
+    def move(self, folder, key):
+        """Move the specified key to folder"""
+        # Basically this is a sophisticated __delitem__
+        # We need the path so we can make it in the new folder
+        path, host, flags = self._exists(key)
+        self._invalidate_cache()
+        # Now, find out what path linked to - and then...
+        self.filesystem.remove(path)
+        # And now put path back into the specified folder
+
     def __repr__(self):
         return "<%s>" % (self.folder)
 
@@ -571,7 +581,7 @@ class MdClient(object):
     def lsfolders(self, stream=sys.stdout):
         """List the subfolders"""
         for f in self.folder.folders():
-            print >>stream, f
+            print >>stream, f.strip(".")
 
     def remove(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)
