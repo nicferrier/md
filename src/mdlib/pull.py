@@ -11,31 +11,78 @@ method. It also needs maintenance commands to flush back local changes
 to the upstream maildir. For example removing files on the upstream
 that have no links into the maildir structure locally.
 
-The protocol is implemented with basic gnu commands 'find', 'sed' and
-'cat'
+The protocol is implemented with basic gnu/sh commands:
+
+  echo
+  while
+  read
+  sed
+
+the sed is gnu sed.
 """
 
 from subprocess import Popen
 from subprocess import PIPE
 
-class _SSH(object):
+class _SSHStore(object):
     """A very simple ssh client based on the unix command.
 
     This could easily be made better using one of the python ssh
     implementations such as paramiko."""
 
-    def __init__(self, host):
+    def __init__(self, host, directory):
         self.host = host
+        self.directory = directory
 
-    def cmd(self, cmd):
+    def cmd(self, cmd, verbose=False):
+        """Executes the specified command on the remote host.
+
+        The cmd must be format safe, this means { and } must be doubled, thusly:
+
+          echo /var/local/maildir/{{cur,new}}
+
+        the cmd can include the format word 'maildir' to be replaced
+        by self.directory. eg:
+
+          echo {maildir}/{{cur,new}}
+        """
+        command = cmd.format(maildir=self.directory)
+        if verbose:
+            print command
         p = Popen([
                 "ssh",
                 "-T",
                 self.host,
-                cmd
+                command
                 ], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout,stderr = p.communicate()
         return stdout
+
+class _Store(object):
+    """A simple local based store command abstraction."""
+
+    def __init__(self, directory):
+        self.directory = directory
+
+    def cmd(self, cmd, verbose=False):
+        """Executes the specified command on the remote host.
+
+        The cmd must be format safe, this means { and } must be doubled, thusly:
+
+          echo /var/local/maildir/{{cur,new}}
+
+        the cmd can include the format word 'maildir' to be replaced
+        by self.directory. eg:
+
+          echo {maildir}/{{cur,new}}
+        """
+        command = cmd.format(maildir=self.directory)
+        if verbose:
+            print command
+        p = Popen(["bash", "-c", command], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        stdout,stderr = p.communicate()
+        return stdout
+
 
 from os import listdir
 from os import symlink
@@ -46,8 +93,12 @@ from os.path import exists as existspath
 from os.path import join as joinpath
 import re
 
-def _list_remote(sshcon, maildir, verbose=False):
-    """List the remote maildir.
+def _list_remote(store, maildir, verbose=False):
+    """List the a maildir.
+
+    store is an abstract representation of the source maildir. 
+
+    maildir is the local maildir to which mail will be pulled.
 
     This is a generator for a reason. Because of the way ssh
     multi-mastering works a single open TCP connection allows multiple
@@ -60,33 +111,44 @@ def _list_remote(sshcon, maildir, verbose=False):
     """
     # This command produces a list of all files in the maildir like:
     #   base-filename timestamp container-directory
-    command = """echo {maildir}/{{cur,new}} | tr ' ' '\\n' | while read path ; do ls -1Ugo --time-style=+%s $path | sed -rne "s|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 $path|p";done""".format(
-        maildir=maildir
-        )
-    if verbose:
-        print command
-    stdout = sshcon.cmd(command)
+    command = """echo {maildir}/{{cur,new}} | tr ' ' '\\n' | while read path ; do ls -1Ugo --time-style=+%s $path | sed -rne "s|[a-zA-Z-]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+([0-9]+)[ \t]+([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*|\\2 \\1 $path|p";done"""
+    stdout = store.cmd(command, verbose)
     lines = stdout.split("\n")
     for line in lines:
         parts = line.split(" ")
-        if len(parts) == 3:
-            yield parts
+        if len(parts) >= 3:
+            yield parts[0:3]
     
-def pull(host, maildir, localmaildir, noop=False, verbose=False):
+def sshpull(host, maildir, localmaildir, noop=False, verbose=False):
+    """Pull a remote maildir to the local one.
+    """
+    store = _SSHStore(host, maildir)
+    _pull(store, localmaildir, noop, verbose)
+
+def filepull(maildir, localmaildir, noop=False, verbose=False):
+    """Pull one local maildir into another.
+
+    The source need not be an md folder (it need not have a store). In
+    this case filepull is kind of an import.
+    """
+    store = _Store(maildir)
+    _pull(store, localmaildir, noop, verbose)
+
+
+def _pull(store, localmaildir, noop=False, verbose=False):
     localstore = expanduser(joinpath(localmaildir, "store"))
     
     # Get the list of mail we already have locally
-    maildir_pattern = re.compile("^([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*(.*)")
+    maildir_pattern = re.compile(
+        "^([0-9]+\\.[A-Za-z0-9]+)(\\.([.A-Za-z0-9-]+))*(:[2],([PRSTDF]*))*(.*)"
+        )
     localfiles = [
         maildir_pattern.match(f).group(1) 
         for f in listdir(localstore) if maildir_pattern.match(f)
         ]
 
-    # Make the ssh connection
-    np = _SSH(host)
-
     # Loop through the remote files checking the local copies
-    for basefile, timestamp, container in _list_remote(np, maildir, verbose=verbose):
+    for basefile, timestamp, container in _list_remote(store, localmaildir, verbose=verbose):
         if basefile in localfiles:
             if verbose:
                 print "found %s" % basefile
@@ -97,7 +159,11 @@ def pull(host, maildir, localmaildir, noop=False, verbose=False):
                     print "exists %s %s" % (basefile, storefile)
             else:
                 print "pulling %s %s to %s" % (basefile, container, storefile)
-                stdout = np.cmd("cat %s/%s*" % (container, basefile))
+                stdout = store.cmd("cat %s/%s*" % (container, basefile), verbose=verbose)
+
+                if verbose and len(stdout) < 1:
+                    print "%s is an error" % storefile
+
                 if not noop and len(stdout) > 0:
                     with open(storefile, "w") as fd:
                         fd.write(stdout)
@@ -115,5 +181,6 @@ def pull(host, maildir, localmaildir, noop=False, verbose=False):
                             pass
                         else:
                             print "%s %s %s" % (e, storefile, target)
+
 
 # End
