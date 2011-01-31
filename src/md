@@ -174,6 +174,7 @@ class MdCLI(cmdln.Cmdln):
         mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
 
     @cmdln.option("-N", "--noop", help="do not pull", action="store_true")
+    @cmdln.option("-f", "--filter", help="filter filename", action="store")
     def do_pull(self, subcmd, opts, remote_maildir):
         """${cmd_name}: pull the remote maildir into the local maildir.
 
@@ -198,6 +199,15 @@ class MdCLI(cmdln.Cmdln):
         local_maildir = self.maildir
         noop = getattr(opts, "noop", False) or False
         verbose = getattr(self.options, "verbose", False) or False
+        filterfile = getattr(opts, "filter", None) or None
+
+        try:
+            filterfd = open(filterfile)
+        except:
+            filterfd = None
+            # Some error loading the filterfile
+            if verbose:
+                print >>sys.stderr, "could not load filter file"
 
         data = m.groupdict()
         if data.get("protocol") == "ssh":
@@ -213,12 +223,26 @@ class MdCLI(cmdln.Cmdln):
                 if not data.get("user", None) \
                 else "%s@%s" % (data.get("user"), data.get("hostname"))
             remote_maildir = data.get("path")
-            mdlib.pull.sshpull(host, remote_maildir, local_maildir, noop, verbose)
+            mdlib.pull.sshpull(host, remote_maildir, local_maildir, noop, verbose, filterfd)
         elif data.get("protocol") == "file":
             maildir = data.get("urlpart")
-            mdlib.pull.filepull(maildir, local_maildir, noop, verbose)
+            mdlib.pull.filepull(maildir, local_maildir, noop, verbose, filterfd)
         else:
             print "%s not a recognized protocol" % protocol
+
+        # Finally try and close the filterfd
+        if filterfd:
+            try:
+                filterfd.close()
+            except:
+                if verbose:
+                    print >>sys.stderr, "couldn't close open filter file"
+
+    def do_newfilter(self, subcmd, opts):
+        """${cmd_name}: make a filterfile and spit it to stdout.
+        """
+        from mdlib.filterprocessor import RULES
+        print RULES
 
     def do_storecheck(self, subcmd, opts):
         """${cmd_name}: checks the store for files that may not be in the maildirs.
