@@ -119,23 +119,35 @@ def _list_remote(store, maildir, verbose=False):
         if len(parts) >= 3:
             yield parts[0:3]
     
-def sshpull(host, maildir, localmaildir, noop=False, verbose=False):
+def sshpull(host, maildir, localmaildir, noop=False, verbose=False, filterfile=None):
     """Pull a remote maildir to the local one.
     """
     store = _SSHStore(host, maildir)
-    _pull(store, localmaildir, noop, verbose)
+    _pull(store, localmaildir, noop, verbose, filterfile)
 
-def filepull(maildir, localmaildir, noop=False, verbose=False):
+def filepull(maildir, localmaildir, noop=False, verbose=False, filterfile=None):
     """Pull one local maildir into another.
 
     The source need not be an md folder (it need not have a store). In
     this case filepull is kind of an import.
     """
     store = _Store(maildir)
-    _pull(store, localmaildir, noop, verbose)
+    _pull(store, localmaildir, noop, verbose, filterfile)
 
+from filterprocessor import parse as parse_filter
+from StringIO import StringIO
+from hdrparser import HeaderOnlyParser
 
-def _pull(store, localmaildir, noop=False, verbose=False):
+def _filter(msgdata, mailparser, mailfilters):
+    """Filter msgdata by mailfilters"""
+    for f in mailfilters:
+        msg = mailparser.parse(StringIO(msgdata))
+        rule = f(msg)
+        if rule:
+            yield rule
+    return
+
+def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
     localstore = expanduser(joinpath(localmaildir, "store"))
     
     # Get the list of mail we already have locally
@@ -146,6 +158,10 @@ def _pull(store, localmaildir, noop=False, verbose=False):
         maildir_pattern.match(f).group(1) 
         for f in listdir(localstore) if maildir_pattern.match(f)
         ]
+
+    # Read in the filters if we have them
+    mailfilters = parse_filter(filterfile) if filterfile else []
+    mailparser = HeaderOnlyParser() if mailfilters else None
 
     # Loop through the remote files checking the local copies
     for basefile, timestamp, container in _list_remote(store, localmaildir, verbose=verbose):
@@ -164,6 +180,9 @@ def _pull(store, localmaildir, noop=False, verbose=False):
                 if verbose and len(stdout) < 1:
                     print "%s is an error" % storefile
 
+                # If we have filters then we should pass the message object to them
+                rules_applied = list(_filter(stdout, mailparser, mailfilters))
+                
                 if not noop and len(stdout) > 0:
                     with open(storefile, "w") as fd:
                         fd.write(stdout)
@@ -181,6 +200,11 @@ def _pull(store, localmaildir, noop=False, verbose=False):
                             pass
                         else:
                             print "%s %s %s" % (e, storefile, target)
+                            
+                    # Now, apply the filter if there was one?
+                    if rules_applied:
+                        for f in rules_applied:
+                            print f
 
 
 # End
