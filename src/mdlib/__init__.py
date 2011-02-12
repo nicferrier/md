@@ -27,6 +27,7 @@ import sys
 import re
 from os import stat
 from os.path import abspath
+from os.path import basename
 from os.path import join as joinpath
 from os.path import split as splitpath
 import errno
@@ -60,8 +61,10 @@ _hdr_parser = HeaderOnlyParser()
 
 from pyproxyfs import Filesystem
 OSFILESYSTEM = Filesystem()
-MDMSGPATHRE = "%s/(?P<key>[0-9]+\\.[A-Za-z0-9]+)(\\.(?P<hostname>[.A-Za-z0-9-]+))*(:[2],(?P<flags>[PRSTDF]*))*"
+
+MDMSG_FILENAME_PATTERN = "(?P<key>[0-9]+\\.[A-Za-z0-9]+)(\\.(?P<hostname>[.A-Za-z0-9-]+))*(:[2],(?P<flags>[PRSTDF]*))*"
 SEPERATOR="#"
+
 class MdMessage(object):
     def __init__(self, 
                  key, 
@@ -70,6 +73,11 @@ class MdMessage(object):
                  filesystem=OSFILESYSTEM):
         # This is a cache var for implementing self.content
         self._content = None
+
+        # In the future we may support building messages from strings
+        # but right now we require a file
+        if not filename:
+            raise Exception("no filename specified")
 
         # Start by JUST reading the headers
         with filesystem.open(filename) as hdrs_fd:
@@ -80,10 +88,13 @@ class MdMessage(object):
         self.folder = folder
         self.filename = filename
         self.filesystem = filesystem
-        self.msgpathre = re.compile(MDMSGPATHRE % joinpath(
-                self.folder.base,
-                self.folder.folder, 
-                "cur"
+        self.msgpathre = re.compile("%s/%s" % (
+                joinpath(
+                    self.folder.base,
+                    self.folder.folder, 
+                    "cur"
+                    ),
+                MDMSG_FILENAME_PATTERN
                 ))
         self.key = key
         self.hdrmethodre = re.compile("get_([a-z_]+)")
@@ -295,10 +306,20 @@ class MdFolder(object):
         self.is_subfolder = subfolder
         self.filesystem = filesystem
 
+        self._cur = joinpath(base, (".%s" if subfolder else "%s") % foldername, "cur")
+        self._cur_re = re.compile("%s/%s" % (self._cur, MDMSG_FILENAME_PATTERN))
+
         # Memoization cache
-        self._foldername_cache = {}
+        self._foldername_cache = {}  ### this is a cache of other folder names, eg: 'new'
         self._files_cache = {}
         self._keys_cache = _KeysCache()
+
+    def get_name(self):
+        """What is this folder's name?
+        
+        The name does include a "." if the folder is a subfolder.
+        """
+        return ".%s" % self.folder if self.is_subfolder else self.folder
 
     def _foldername(self, additionalpath=""):
         if not self._foldername_cache.get(additionalpath):
@@ -309,47 +330,74 @@ class MdFolder(object):
         return self._foldername_cache[additionalpath]
 
     def folders(self):
-        """Return an object the holds the folders for this folder.
+        """Return a map of the subfolder objects for this folder.
 
         This is a snapshot of the folder list at the time the call was made. 
         It does not update over time.
+
+        The map contains MdFolder objects:
+
+          maildir.folders()["Sent"]
+
+        might retrieve the folder .Sent from the maildir.
         """
 
         entrys = self.filesystem.listdir(abspath(self._foldername()))
         regex = re.compile("\\..*")
-        just_dirs = [d for d in entrys if regex.match(d)]
+        just_dirs = dict([(d,d) for d in entrys if regex.match(d)])
 
         folder = self._foldername()
         filesystem = self.filesystem
 
         class FolderList(object):
             def __iter__(self):
-                return just_dirs.__iter__()
+                for dn in just_dirs.keys():
+                    yield MdFolder(
+                        dn[1:],
+                        base=folder,
+                        subfolder=True,
+                        filesystem=filesystem
+                        )
+                return
 
             def __list__(self):
-                return list(self.__iter__())
+                return [dn[1:] for dn in just_dirs]
 
-            def __contains__(self, item):
-                return just_dirs.__contains__(".%s" % item)
+            def __contains__(self, name):
+                return just_dirs.__contains__(".%s" % name)
 
-            def __getitem__(self, index):
+            def __getitem__(self, name):
                 return MdFolder(
-                    just_dirs[index],
+                    just_dirs[".%s" % name][1:],
                     base=folder,
-                    filesystem=filesystem)
+                    subfolder=True,
+                    filesystem=filesystem
+                    )
 
         f = FolderList()
         return f
 
-    def move(self, folder, key):
-        """Move the specified key to folder"""
+    def move(self, key, folder):
+        """Move the specified key to folder.
+
+        folder must be an MdFolder instance. MdFolders can be obtained
+        through the 'folders' method call.
+        """
         # Basically this is a sophisticated __delitem__
         # We need the path so we can make it in the new folder
         path, host, flags = self._exists(key)
         self._invalidate_cache()
-        # Now, find out what path linked to - and then...
-        self.filesystem.remove(path)
-        # And now put path back into the specified folder
+
+        # Now, move the message file to the new folder
+        newpath = joinpath(
+            folder.base, 
+            folder.get_name(), 
+            "cur",     # we should probably move it to new if it's in new
+            basename(path)
+            )
+        self.filesystem.rename(path, newpath)
+        # And update the caches in the new folder
+        folder._invalidate_cache()
 
     def __repr__(self):
         return "<%s>" % (self.folder)
@@ -371,14 +419,13 @@ class MdFolder(object):
         if not self._files_cache:
             self._muaprocessnew()
             foldername = self._foldername("cur")
-            regex = re.compile(MDMSGPATHRE % foldername)
             files = self.filesystem.listdir(foldername)
             for filename in files:
                 try:
                     # We could use "%s/%s" here instead of joinpath... it's faster
                     # path = joinpath(foldername, filename)
                     path = "%s/%s" % (foldername, filename)
-                    m = regex.match(path)
+                    m = self._cur_re.match(path)
                     if m:
                         desc = m.groupdict()
                         key = desc["key"]
@@ -562,12 +609,18 @@ class MdClient(object):
     def lsfolders(self, stream=sys.stdout):
         """List the subfolders"""
         for f in self.folder.folders():
-            print >>stream, f.strip(".")
+            print >>stream, f.folder.strip(".")
 
     def remove(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)
         folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
         del folder[msgkey]
+
+    def move(self, msgid, to_foldername):
+        foldername, msgkey = msgid.split(SEPERATOR)
+        folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
+        target_folder = folder.folders()[to_foldername]
+        folder.move(msgkey, target_folder)
 
     def _get(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)
