@@ -25,16 +25,20 @@ class Rule(object):
         self.field = field
         self.command = command
 
-    def __call__(self, msg):
-        """Test the message against the rule and return self if it passes"""
-        # I think this should optionally take an mdfolder and filter
-        # the message appropriately if it's there
+    def __call__(self, msg, folder=None):
+        """Test the message against the rule and optionally action it.
+
+        If folder is specified then any performable action is attempted on it.
+        """
         if self.field:
             field = msg[self.field]
             if field:
                 try:
                     match = re.search(self.pattern, field)
+                    # The rule matched
                     if match:
+                        if folder:
+                            pass
                         return self
                 except Exception,e:
                     print "whoops! %s %s %s" % (self.pattern, field, self.command)

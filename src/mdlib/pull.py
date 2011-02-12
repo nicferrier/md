@@ -137,12 +137,15 @@ def filepull(maildir, localmaildir, noop=False, verbose=False, filterfile=None):
 from filterprocessor import parse as parse_filter
 from StringIO import StringIO
 from hdrparser import HeaderOnlyParser
+from os.path import basename
+from os.path import dirname
+from api import MdFolder
 
-def _filter(msgdata, mailparser, mailfilters):
+def _filter(msgdata, mailparser, mdfolder, mailfilters):
     """Filter msgdata by mailfilters"""
     for f in mailfilters:
         msg = mailparser.parse(StringIO(msgdata))
-        rule = f(msg)
+        rule = f(msg, folder=mdfolder)
         if rule:
             yield rule
     return
@@ -162,7 +165,10 @@ def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
     # Read in the filters if we have them
     mailfilters = parse_filter(filterfile) if filterfile else []
     mailparser = HeaderOnlyParser() if mailfilters else None
-
+    mdfolder = MdFolder(
+        basename(localmaildir), 
+        base=dirname(localmaildir)
+        ) if mailfilters else None
     # Loop through the remote files checking the local copies
     for basefile, timestamp, container in _list_remote(store, localmaildir, verbose=verbose):
         if basefile in localfiles:
@@ -180,9 +186,6 @@ def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
                 if verbose and len(stdout) < 1:
                     print "%s is an error" % storefile
 
-                # If we have filters then we should pass the message object to them
-                rules_applied = list(_filter(stdout, mailparser, mailfilters))
-                
                 if not noop and len(stdout) > 0:
                     with open(storefile, "w") as fd:
                         fd.write(stdout)
@@ -201,10 +204,8 @@ def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
                         else:
                             print "%s %s %s" % (e, storefile, target)
                             
-                    # Now, apply the filter if there was one?
-                    if rules_applied:
-                        for f in rules_applied:
-                            print f
+                    # If we have filters then we should pass the message object to them
+                    list(_filter(stdout, mailparser, mailfilters, mdfolder))
 
 
 # End
