@@ -137,6 +137,14 @@ class MdCLI(cmdln.Cmdln):
         client = MdClient(self.maildir)
         client.remove(message)
 
+    def do_mv(self, subcmd, opts, message, folder):
+        """${cmd_name}: move the specified message to the specified folder
+
+        ${cmd_usage}
+        """
+        client = MdClient(self.maildir)
+        client.move(message, folder)
+
     def do_text(self, subcmd, opts, message):
         """${cmd_name}: get the best text part of the specified message
 

@@ -17,6 +17,24 @@ RULES = """
 #
 """
 
+TEST_RULES = """
+# My filter file
+#
+# Whitepsace lines and lines starting with # are ignored
+#
+# Filters go: regex field command 
+# the filterline must begin with a non-whitespace character that is
+# used as the field separator
+# 
+/Laura Chaffee/from/rm
+/host[0-9]{2}\.tin\.woome/subject/mv woome.robot 
+#
+# Here we see the field separator being changed
+|/somepath|subject|rm
+#
+"""
+
+
 import re
 
 class Rule(object):

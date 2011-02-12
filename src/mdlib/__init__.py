@@ -147,12 +147,18 @@ class MdClient(object):
     def lsfolders(self, stream=sys.stdout):
         """List the subfolders"""
         for f in self.folder.folders():
-            print >>stream, f
+            print >>stream, f.folder.strip(".")
 
     def remove(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)
         folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
         del folder[msgkey]
+
+    def move(self, msgid, to_foldername):
+        foldername, msgkey = msgid.split(SEPERATOR)
+        folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
+        target_folder = folder.folders()[to_foldername]
+        folder.move(msgkey, target_folder)
 
     def _get(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)
