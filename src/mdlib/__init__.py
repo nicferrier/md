@@ -38,10 +38,10 @@ except ImportError:
 
 import logging
 from api import MdFolder
+from api import SEPERATOR
 
 logger = logging.getLogger("mdlib")
 logging.basicConfig()
-
 
 def _escape(match_obj):
     if match_obj.group(0) == "\n":
