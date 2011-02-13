@@ -378,7 +378,7 @@ class MdFolder(object):
                 continue
             curfilename = self._foldername(joinpath("new", filename))
             newfilename = joinpath(
-                self._foldername("cur"),
+                self._cur,
                 "%s:2,%s" % (filename, "")
                 )
             self.filesystem.rename(curfilename, newfilename)
