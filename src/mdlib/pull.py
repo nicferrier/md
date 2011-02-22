@@ -143,11 +143,12 @@ from api import MdFolder
 
 def _filter(msgdata, mailparser, mdfolder, mailfilters):
     """Filter msgdata by mailfilters"""
-    for f in mailfilters:
-        msg = mailparser.parse(StringIO(msgdata))
-        rule = f(msg, folder=mdfolder)
-        if rule:
-            yield rule
+    if mailfilters:
+        for f in mailfilters:
+            msg = mailparser.parse(StringIO(msgdata))
+            rule = f(msg, folder=mdfolder)
+            if rule:
+                yield rule
     return
 
 def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
