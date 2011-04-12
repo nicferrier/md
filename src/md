@@ -70,6 +70,8 @@ class MdCLI(cmdln.Cmdln):
         client.lsfolders(stream=sys.stdout)
 
     @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
+    @cmdln.option("-f", "--field", help="specify the field")
+    @cmdln.option("-g", "--grep", help="pattern match on the output string")
     @cmdln.option(
         "-s", 
         "--since", 
@@ -88,10 +90,12 @@ class MdCLI(cmdln.Cmdln):
         """
         client = MdClient(self.maildir)
         client.ls(
-            foldername=folder, 
-            stream=sys.stdout, 
-            reverse=getattr(opts, "reverse", False),
-            since=float(getattr(opts, "since", -1))
+            foldername = folder, 
+            stream = sys.stdout, 
+            reverse = getattr(opts, "reverse", False),
+            grep = getattr(opts, "grep", None),
+            field = getattr(opts, "field", None),
+            since = float(getattr(opts, "since", -1))
             )
 
     @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")

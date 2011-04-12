@@ -92,22 +92,33 @@ class MdClient(object):
         itemlist = [(folder, key, msg) for key,msg in sorted_lst]
         return itemlist
 
-    def ls(self, foldername="INBOX", reverse=False, since=None, stream=sys.stdout):
+    def ls(self, foldername="INBOX", reverse=False, since=None, grep=None, field=None, stream=sys.stdout):
         """Do standard text list of the folder to the stream.
 
         'since' allows the listing to be date filtered since that
         date. It should be a float, a time since epoch.
+        
+        'grep' allows text matching on the whole record
+
+        'field' allows only 1 field to be output
         """
         for folder, mk, m in self._list(foldername, reverse, since):
             try:
                 # I am very unsure about this defaulting of foldername
-                print >>stream, "% -20s % 20s % 50s  [%s]  %s" % (
+                output_items = (
                     "%s%s%s" % (folder.folder or foldername or "INBOX", SEPERATOR, mk),
                     m.date,
                     m.get_from()[0:50] if m.get_from() else "", 
                     m.get_flags(),
                     re.sub("\n", "", m.get_subject() or "")
                     )
+
+                output_string = "% -20s % 20s % 50s  [%s]  %s" % output_items
+                if not grep or (grep and grep in output_string):
+                    if field:
+                        print >>stream, output_items[int(field)]
+                    else:
+                        print >>stream, output_string
             except IOError,e:
                 if e.errno == errno.EPIPE:
                     # Broken pipe we can ignore
