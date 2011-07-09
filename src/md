@@ -138,8 +138,12 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        client = MdClient(self.maildir)
-        client.remove(message)
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
+        try:
+            client.remove(message)
+        except KeyError:
+            return 1
 
     def do_mv(self, subcmd, opts, message, folder):
         """${cmd_name}: move the specified message to the specified folder
@@ -156,6 +160,16 @@ class MdCLI(cmdln.Cmdln):
         """
         client = MdClient(self.maildir)
         client.gettext(message, sys.stdout)
+
+    def do_raw(self, subcmd, opts, message):
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
+        client.getraw(message, sys.stdout)
+
+    def do_rawpart(self, subcmd, opts, message):
+        maildir = getattr(self.options, "maildir",MAILDIR)
+        client = MdClient(maildir)
+        client.getrawpart(message, sys.stdout)
 
     def do_struct(self, subcmd, opts, message):
         """${cmd_name}: get the structure of the specified message
