@@ -309,9 +309,6 @@ class MdFolder(object):
 
         might retrieve the folder .Sent from the maildir.
         """
-
-        import pdb ; pdb.set_trace()
-
         entrys = self.filesystem.listdir(abspath(self._foldername()))
         regex = re.compile("\\..*")
         just_dirs = dict([(d,d) for d in entrys if regex.match(d)])
