@@ -310,6 +310,8 @@ class MdFolder(object):
         might retrieve the folder .Sent from the maildir.
         """
 
+        import pdb ; pdb.set_trace()
+
         entrys = self.filesystem.listdir(abspath(self._foldername()))
         regex = re.compile("\\..*")
         just_dirs = dict([(d,d) for d in entrys if regex.match(d)])
@@ -319,7 +321,10 @@ class MdFolder(object):
 
         class FolderList(object):
             def __iter__(self):
-                for dn in just_dirs.keys():
+                dirs = just_dirs.keys()
+                dirs.sort()
+                dirs.reverse()
+                for dn in dirs:
                     yield MdFolder(
                         dn[1:],
                         base=folder,

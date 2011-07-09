@@ -1,5 +1,5 @@
 include AUTHORS
-include README.md
+include README.creole
 include COPYING
 include src 
 include tests
