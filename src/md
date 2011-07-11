@@ -138,7 +138,7 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        maildir = getattr(self.options, "maildir",MAILDIR)
+        maildir = self.maildir
         client = MdClient(maildir)
         try:
             client.remove(message)
