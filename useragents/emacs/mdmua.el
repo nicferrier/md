@@ -15,11 +15,23 @@
   "Where md can be found.")
 
 
+(defvar mdmua-folders nil
+  "List of folders in the mdmua list buffer.
+
+Buffer local.")
+
+(defvar mdmua-pulling nil
+  "Whether the current mdmua list buffer is pulling or not.
+
+Buffer local.")
+
 (defcustom mdmua-maildir "~/.maildirs/nic"
   "Where the maildir can be found."
   :group 'md)
 
 ;; Utility functions
+
+(defvar mdmua--command-log (get-buffer-create "*mdmua-command-log*"))
 
 (defun mdmua-util-strip (str)
   "Standard line break removal"
@@ -59,15 +71,17 @@
 (defun mdmua--command (command &optional buffer)
   "Run the specified command with mdmua and using the channel as a buffer unless buffer is not nil"
   (let* ((buf (if buffer buffer (get-buffer-create "*mdmua-channel*" )))
-         (proc 
-          (start-process-shell-command 
-           "mdmua" 
-           buf
-           (format "%s -M %s %s" 
+         (cmdstr (format "%s -M %s %s" 
                    mdmua-md-bin-path 
                    (expand-file-name mdmua-maildir) 
-                   command))))
-    proc))
+                   command)))
+    (with-current-buffer mdmua--command-log
+      (insert cmdstr "\n"))
+    (start-process-shell-command 
+     "mdmua" 
+     buf
+     cmdstr
+     )))
 
 
 ;; Main program
@@ -76,14 +90,17 @@
   (interactive)
   (setq mdmua-buffer (get-buffer-create "mdmua"))
   (switch-to-buffer mdmua-buffer)
-  ;; Got to define a mode-map
   (make-local-variable 'mdmua-folders)
   (setq buffer-read-only 't)
   (setq mdmua-folders '("INBOX"))
+  (make-local-variable 'mdmua-pulling)
+  (setq mdmua-pulling "no")
+  ;; Got to define a mode-map
   (unless mdmua-mode-map
     (progn
       (setq mdmua-mode-map (make-sparse-keymap))
       (define-key mdmua-mode-map "\r" 'mdmua-open)
+      (define-key mdmua-mode-map "\C-F" 'mdmua-open-full)
       (define-key mdmua-mode-map ">" 'mdmua-next-folder)
       (define-key mdmua-mode-map "<" 'mdmua-prev-folder)
       (define-key mdmua-mode-map "d" 'mdmua-trash-message))
@@ -127,6 +144,48 @@
        msglist))))
 
 
+;; Pull handling
+
+(defun mdmua--sentinel-mdmua-pull (process signal)
+  (cond
+   ((equal signal "finished\n")
+    ;; We can now refresh the data
+    (with-current-buffer "mdmua"
+      (setq mdmua-pulling "done")
+      (setq mdmua-pull-display-string " mdmua:done")
+      )
+    (kill-buffer (process-buffer process))
+    )))
+
+(defun mdmua-pull ()
+  "Run the mdmua pull"
+  (interactive)
+  (if (with-current-buffer "mdmua"
+        (not (equal mdmua-pulling " mdmua:done")))
+      (let ((proc (start-process-shell-command 
+                   "mdmua-pull"
+                   "* mdmua-pull *"
+                   "mdpullall")))
+        (with-current-buffer "mdmua"
+          (setq mdmua-pulling "running"))
+        (setq mdmua-pull-display-string " mdmua:running")
+        (set-process-sentinel proc 'mdmua--sentinel-mdmua-pull)
+        )
+    (message "mdmua already pulling")
+  ))
+
+
+(defvar mdmua-pull-display-string " mdmua:done"
+  ;; TODO
+  ;; WHY does this need a space when it is added to the global-mode-string list???
+  "The string to show whether the mdmua is being pulled or not")
+
+(defun mdmua-pull-display ()
+  "Set the mode line to display when we are pulling"
+  (interactive)
+  (setq global-mode-string (append global-mode-string (list 'mdmua-pull-display-string)))
+  )
+
 ;; Message funcs
 (require 'qp)
 (defun mdmua-message-display (details)
@@ -139,17 +198,25 @@ details is a props list
   (buffer-disable-undo)
   (if (not (plist-get details :no-render))
       (let ((content (plist-get details :text)))
-        (auto-fill-mode 1)
-        (insert 
-         (quoted-printable-decode-string content))
+        ;;(quoted-printable-decode-string content))
+        (insert content)
+        ;; This is a trick from imapua - deals with dodgy line endings
+        (subst-char-in-region (point-min) (point-max) ?\r ?\ )
+        (message-mode)
+        (message-sort-headers)
         (save-excursion
           (beginning-of-buffer)
           (search-forward "--text follows this line--\n" (point-max) 't)
-          ;;(fill-region (point) (point-max))
+          (fill-individual-paragraphs
+           (point) 
+           (point-max) 
+           nil
+           "\\([A-Za-z ]+:\\|>\\|---\\)"
+           )
           )
-        (message-mode)
         (local-set-key "\C-ca" 'message-reply)
-        (message-sort-headers)))
+        (local-set-key "\C-cw" 'message-wide-reply)
+        ))
   (beginning-of-buffer)
   (setq buffer-read-only 't)
   (set-buffer-modified-p nil))
@@ -452,26 +519,32 @@ When called interactively this expects to be located on a line with the folder o
    ((equal signal "finished\n")
     ;; We need to read the lines in the buffer and put them into the 
     ;; user's display buffer's in a sort of repaint
-    (let ((message-lines 
-	   (with-current-buffer (process-buffer process)
-	     (mdmua-util-buffer-lines)))
-	  (folder-obj (assoc 
-		       (with-current-buffer (process-buffer process)
-			 folder-name)
-		       mdmua-folders)))
-      ;; Change the folders message list and set the open flag to true
-      (plist-put (cdr folder-obj)
-		 :messages
-		 (mapcar (lambda (line)
-			   (condition-case nil
-                               (let ((json (json-read-from-string line)))
-                                 (mdmua-alist-to-plist json))
-			     (error nil)
-			     ))
-			 message-lines))
-      (plist-put (cdr folder-obj) :open 't)
-      (mdmua-render (mapcar (lambda (x) (car x)) mdmua-folders) process)
-    ))))
+    (let ((folders (with-current-buffer "mdmua"
+                     (copy-list mdmua-folders))))
+      (let ((message-lines (with-current-buffer (process-buffer process)
+                             (mdmua-util-buffer-lines)))
+            (folder-obj (assoc 
+                         (with-current-buffer (process-buffer process)
+                           folder-name)
+                         folders)))
+        ;; Change the folders message list and set the open flag to true
+        (plist-put (cdr folder-obj)
+                   :messages
+                   (mapcar (lambda (line)
+                             (condition-case nil
+                                 (let ((json (json-read-from-string line)))
+                                   (mdmua-alist-to-plist json))
+                               (error nil)
+                               ))
+                           message-lines))
+        (plist-put (cdr folder-obj) :open 't)
+        (mdmua-render (mapcar 
+                       (lambda (x) (car x)) 
+                       folders
+                       ) 
+                      process)
+        ))))
+  )
 
 (defun mdmua-list (folder)
   "List the messages in a folder."
