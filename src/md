@@ -127,7 +127,8 @@ class MdCLI(cmdln.Cmdln):
         If the path is relative then create under MAILDIR
         else create at the absolute location.
         """
-        d = path if path[0] == "/" else joinpath(self.maildir, path)
+        # Do we need to make this ".path" if it's relative?
+        d = path if path[0] == "/" else joinpath(self.maildir, "." + path)
         os.makedirs(joinpath(d, "cur"))
         os.makedirs(joinpath(d, "new"))
         os.makedirs(joinpath(d, "tmp"))
@@ -162,13 +163,11 @@ class MdCLI(cmdln.Cmdln):
         client.gettext(message, sys.stdout)
 
     def do_raw(self, subcmd, opts, message):
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.getraw(message, sys.stdout)
 
     def do_rawpart(self, subcmd, opts, message):
-        maildir = getattr(self.options, "maildir",MAILDIR)
-        client = MdClient(maildir)
+        client = MdClient(self.maildir)
         client.getrawpart(message, sys.stdout)
 
     def do_struct(self, subcmd, opts, message):
