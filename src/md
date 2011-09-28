@@ -166,17 +166,30 @@ class MdCLI(cmdln.Cmdln):
         client = MdClient(self.maildir)
         client.getraw(message, sys.stdout)
 
+    @cmdln.option("-p", "--part", help="specify the part number")
     def do_rawpart(self, subcmd, opts, message):
-        client = MdClient(self.maildir)
-        client.getrawpart(message, sys.stdout)
+        """${cmd_name}: dump a part from the specified message
 
+        ${cmd_usage}
+        ${cmd_option_list}
+        """
+        client = MdClient(self.maildir)
+        partid = getattr(opts, "part", None)
+        if not partid:
+            client.getrawpart(message, sys.stdout)
+        else:
+            client.getrawpartid(message, partid, sys.stdout)
+
+    @cmdln.option("-i", "--index", help="show indexes against the parts", action="store_true")
     def do_struct(self, subcmd, opts, message):
         """${cmd_name}: get the structure of the specified message
 
         ${cmd_usage}
+        ${cmd_option_list}
         """
         client = MdClient(self.maildir)
-        client.getstruct(message, sys.stdout)
+        indexes = getattr(opts, "index", False)
+        client.getstruct(message, with_index=indexes, stream=sys.stdout)
 
     def do_file(self, subcmd, opts, message):
         """${cmd_name}: download the whole file of the message.

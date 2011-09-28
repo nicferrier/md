@@ -172,6 +172,7 @@ class MdClient(object):
         folder.move(msgkey, target_folder)
 
     def _get(self, msgid):
+        """Yields the message header against each part from the message."""
         foldername, msgkey = msgid.split(SEPERATOR)
         folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
         # Now look up the message
@@ -212,6 +213,16 @@ class MdClient(object):
                 print >>stream, pl
                 break
 
+    def getrawpartid(self, msgid, partid, stream=sys.stdout):
+        """Get a specific part from the message and print it raw.
+        """
+        parts = [part for hdr,part in self._get(msgid)]
+        part = parts[int(partid)]
+        pl = part.get_payload(decode=True)
+        if pl != None:
+            print >>stream, pl
+
+
     def getraw(self, msgid, stream=sys.stdout):
         """Get the whole message and print it.
         """
@@ -220,11 +231,19 @@ class MdClient(object):
         msg = folder[msgkey]
         print msg.content
 
-    def getstruct(self, msgid, stream=sys.stdout):
+    def getstruct(self, msgid, with_index=False, stream=sys.stdout):
         """Get and print the whole message.
+
+        with_index indicates whether to print the index of the part or not.
         """
-        for hdr,part in self._get(msgid):
-            print >>stream, part.get_content_type()
+        parts = [msgpartpair for msgpartpair in self._get(msgid)]
+        index = 0
+        for hdr,part in parts:
+            if with_index:
+                print >>stream, "%d %s" % (index, part.get_content_type())
+            else:
+                print >>stream, part.get_content_type()
+            index += 1
 
     def get(self, msgid, stream=sys.stdout):
         foldername, msgkey = msgid.split(SEPERATOR)
