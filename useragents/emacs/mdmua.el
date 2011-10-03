@@ -316,38 +316,29 @@ useful while we're developing mdmua"""
       ))
   )
 
-;; Deprecated - get rid of this by making mdmua-open-full work like mdmua-open-message
-(defun mdmua--sentinel-gettext (process signal)
-  (cond
-   ((equal signal "finished\n")
-    (mdmua-message-display 
-     (with-current-buffer (process-buffer process)
-       (plist-put 
-	struct
-	:text (buffer-substring (point-min) (point-max)))))
-    (kill-buffer (process-buffer process))
-    )
-   ;; else
-   ('t
-    (message "mdmua open message got signal %s" signal)
-    (display-buffer (process-buffer process))
-   )
-  ))
-
 (defun mdmua-open-full (key)
   "Open the whole file of the message"
   (interactive (list 
 		(plist-get (text-properties-at (point)) 'key)))
-  (let* ((buf (get-buffer-create "mdmua-message-channel"))
-         (proc (mdmua--command (format "file %s" key) buf)))
-    (with-current-buffer (process-buffer proc)
-      (make-local-variable 'struct)
-      (setq struct
-            `(:key ,key :no-render ,nil))
-      )
-    (set-process-sentinel proc 'mdmua--sentinel-gettext)
-    )
+  (let ((buf (get-buffer-create (format "* mdmua-message-channel-%s *" key))))
+    (with-mdmua-command (format "file %s" key) buf
+      ;; The sentinel code
+      (cond
+       ((equal signal "finished\n")
+        (switch-to-buffer (process-buffer process))
+        (rename-buffer key)
+        (mdmua-message-mode)
+        (beginning-of-buffer)
+        )
+       ;; else
+       ('t
+        (message "mdmua open message got signal %s" signal)
+        (display-buffer (process-buffer process))
+        )
+       )
+      ))
   )
+
 
 ;; Folder funcs
 
