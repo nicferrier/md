@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t -*-
 ;; mdmua
 ;; maildir mail user agent
 ;; Nic Ferrier, March 2009
@@ -68,6 +69,36 @@ Buffer local.")
 		    (list (mdmua-string-to-plist-symbol (symbol-name (car el)))
 			  (cdr el)))))))
 
+(defmacro with-mdmua-command (command buffer &rest sentinel-forms)
+  "This is a with-process-shell-command.
+
+It would be ideal if Emacs offered that as a builtin, but it does not yet."
+  (declare (indent defun))
+  (let ((bufvar (make-symbol "buf"))
+        (cmdvar (make-symbol "cmd")))
+    `(let* ((,bufvar ,buffer)
+            (,cmdvar ,command)
+            (__buf (if ,bufvar 
+                       ,bufvar 
+                     (get-buffer-create "*mdmua-channel*" )))
+            (__cmdstr (format "%s -M %s %s" 
+                              mdmua-md-bin-path 
+                              (expand-file-name mdmua-maildir) 
+                            ,cmdvar)))
+       ;; Update the command log
+       (with-current-buffer mdmua--command-log
+         (insert __cmdstr "\n"))
+       ;; Now start the shell process
+       (let ((proc (start-process-shell-command "mdmua" __buf __cmdstr)))
+         ;; Capture the sentinel
+         (let ((sentinel-cb (lambda (process signal)
+                              ,@sentinel-forms)))
+           (set-process-sentinel proc sentinel-cb)
+           )))
+    )
+  )
+
+;;; DEPRECATED in favour of with-mdmua-command
 (defun mdmua--command (command &optional buffer)
   "Run the specified command with mdmua and using the channel as a buffer unless buffer is not nil"
   (let* ((buf (if buffer buffer (get-buffer-create "*mdmua-channel*" )))
@@ -221,6 +252,71 @@ details is a props list
   (setq buffer-read-only 't)
   (set-buffer-modified-p nil))
 
+
+
+;; The keymap for the message view mode
+(defvar mdmua-message--keymap-initializedp nil
+  "Is the MDMUA message view mode map initialized yet?
+
+If you want to debug the mode map you can set this back to nil
+and it should get reinitialized next time you make the mode.")
+
+;; Hooks for the message mode
+(defvar mdmua-message-mode-hook nil
+  "The MDMUA message mode hooks.")
+
+(define-derived-mode mdmua-message-mode 
+  message-mode  ;; parent
+  "MDMUA Message"  ;; name
+  "MDMUA Msg \\{mdmua-message-mode-map}" ;; docstring
+  (unless mdmua-message--keymap-initializedp
+    (define-key mdmua-message-mode-map "\C-ca" 'message-reply)
+    (define-key mdmua-message-mode-map "\C-cw" 'message-wide-reply)
+    (setq mdmua-message--keymap-initializedp 't))
+  ;;set the mode as a non-editor mode
+  (put 'mdmua-message-mode 'mode-class 'special)
+  ;;ensure that paragraphs are considered to be whole mailing lists
+  (make-local-variable 'paragraph-start)
+  (setq paragraph-start paragraph-separate)
+  ;;setup the buffer to be read only
+  ;; (make-local-variable 'buffer-read-only)
+  (setq buffer-read-only 't)
+  (set-buffer-modified-p nil)
+  ;;run the mode hooks
+  (run-hooks 'mdmua-message-mode-hook)
+  )
+
+
+(defun mdmua-open-message (key &optional no-render)
+  """Open the message with key.
+
+Specify the prefix arg to not-render the message. This can be
+useful while we're developing mdmua"""
+  (interactive (list 
+		(plist-get (text-properties-at (point)) 'key)
+		current-prefix-arg))
+  (let ((buf (get-buffer-create (format "* mdmua-message-channel-%s *" key))))
+    (with-mdmua-command (format "text %s" key) buf
+      ;; The sentinel code
+      (cond
+       ((equal signal "finished\n")
+        (switch-to-buffer (process-buffer process))
+        (rename-buffer key)
+        ;; This is a trick from imapua - deals with dodgy line endings
+        (subst-char-in-region (point-min) (point-max) ?\r ?\ )
+        (mdmua-message-mode)
+        (beginning-of-buffer)
+        )
+       ;; else
+       ('t
+        (message "mdmua open message got signal %s" signal)
+        (display-buffer (process-buffer process))
+        )
+       )
+      ))
+  )
+
+;; Deprecated - get rid of this by making mdmua-open-full work like mdmua-open-message
 (defun mdmua--sentinel-gettext (process signal)
   (cond
    ((equal signal "finished\n")
@@ -237,24 +333,6 @@ details is a props list
     (display-buffer (process-buffer process))
    )
   ))
-
-(defun mdmua-open-message (key &optional no-render)
-  """Open the message with key.
-
-Specify the prefix arg to not-render the message. This can be
-useful while we're developing mdmua"""
-  (interactive (list 
-		(plist-get (text-properties-at (point)) 'key)
-		current-prefix-arg))
-  (let* ((buf (get-buffer-create "mdmua-message-channel"))
-         (proc (mdmua--command (format "text %s" key) buf)))
-    (with-current-buffer (process-buffer proc)
-      (make-local-variable 'struct)
-      (setq struct
-            `(:key ,key :no-render ,no-render))
-      )
-    (set-process-sentinel proc 'mdmua--sentinel-gettext)
-    ))
 
 (defun mdmua-open-full (key)
   "Open the whole file of the message"
