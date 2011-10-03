@@ -98,6 +98,32 @@ It would be ideal if Emacs offered that as a builtin, but it does not yet."
     )
   )
 
+(defmacro with-mdmua-shell-command (command buffer &rest sentinel-forms)
+  "This is a with-process-shell-command.
+
+This version does not interpolate the correct md binary. It just
+presumes you are executing a sane shell command."
+  (declare (indent defun))
+  (let ((bufvar (make-symbol "buf"))
+        (cmdvar (make-symbol "cmd")))
+    `(let* ((,bufvar ,buffer)
+            (,cmdvar ,command)
+            (__buf (if ,bufvar 
+                       ,bufvar 
+                     (get-buffer-create "*mdmua-channel*" ))))
+       ;; Update the command log
+       (with-current-buffer mdmua--command-log
+         (insert ,cmdvar "\n"))
+       ;; Now start the shell process
+       (let ((proc (start-process-shell-command "mdmua" __buf ,cmdvar)))
+         ;; Capture the sentinel
+         (let ((sentinel-cb (lambda (process signal)
+                              ,@sentinel-forms)))
+           (set-process-sentinel proc sentinel-cb)
+           )))
+    )
+  )
+
 ;;; DEPRECATED in favour of with-mdmua-command
 (defun mdmua--command (command &optional buffer)
   "Run the specified command with mdmua and using the channel as a buffer unless buffer is not nil"
@@ -178,31 +204,30 @@ It would be ideal if Emacs offered that as a builtin, but it does not yet."
 ;; Pull handling
 
 (defun mdmua--sentinel-mdmua-pull (process signal)
-  (cond
-   ((equal signal "finished\n")
-    ;; We can now refresh the data
-    (with-current-buffer "mdmua"
-      (setq mdmua-pulling "done")
-      (setq mdmua-pull-display-string " mdmua:done")
-      )
-    (kill-buffer (process-buffer process))
-    )))
+  )
 
 (defun mdmua-pull ()
   "Run the mdmua pull"
   (interactive)
   (if (with-current-buffer "mdmua"
         (not (equal mdmua-pulling " mdmua:done")))
-      (let ((proc (start-process-shell-command 
-                   "mdmua-pull"
-                   "* mdmua-pull *"
-                   "mdpullall")))
+      (progn
         (with-current-buffer "mdmua"
-          (setq mdmua-pulling "running"))
-        (setq mdmua-pull-display-string " mdmua:running")
-        (set-process-sentinel proc 'mdmua--sentinel-mdmua-pull)
+          (setq mdmua-pulling "running")
+          (setq mdmua-pull-display-string " mdmua:running")
+          )
+        (with-mdmua-shell-command "mdpullall" (get-buffer-create "* mdmua-pull *")
+          (cond
+           ((equal signal "finished\n")
+            ;; We can now refresh the data
+            (with-current-buffer "mdmua"
+              (setq mdmua-pulling "done")
+              (setq mdmua-pull-display-string " mdmua:done")
+              )
+            (kill-buffer (process-buffer process))
+            ))
+          )
         )
-    (message "mdmua already pulling")
   ))
 
 
@@ -219,40 +244,6 @@ It would be ideal if Emacs offered that as a builtin, but it does not yet."
 
 ;; Message funcs
 (require 'qp)
-(defun mdmua-message-display (details)
-  "Actually displays a message part.
-
-details is a props list
-:text being the text
-:key being the key"
-  (switch-to-buffer (get-buffer-create (plist-get details :key)))
-  (buffer-disable-undo)
-  (if (not (plist-get details :no-render))
-      (let ((content (plist-get details :text)))
-        ;;(quoted-printable-decode-string content))
-        (insert content)
-        ;; This is a trick from imapua - deals with dodgy line endings
-        (subst-char-in-region (point-min) (point-max) ?\r ?\ )
-        (message-mode)
-        (message-sort-headers)
-        (save-excursion
-          (beginning-of-buffer)
-          (search-forward "--text follows this line--\n" (point-max) 't)
-          (fill-individual-paragraphs
-           (point) 
-           (point-max) 
-           nil
-           "\\([A-Za-z ]+:\\|>\\|---\\)"
-           )
-          )
-        (local-set-key "\C-ca" 'message-reply)
-        (local-set-key "\C-cw" 'message-wide-reply)
-        ))
-  (beginning-of-buffer)
-  (setq buffer-read-only 't)
-  (set-buffer-modified-p nil))
-
-
 
 ;; The keymap for the message view mode
 (defvar mdmua-message--keymap-initializedp nil
@@ -285,7 +276,6 @@ and it should get reinitialized next time you make the mode.")
   ;;run the mode hooks
   (run-hooks 'mdmua-message-mode-hook)
   )
-
 
 (defun mdmua-open-message (key &optional no-render)
   """Open the message with key.
