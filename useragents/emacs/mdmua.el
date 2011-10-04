@@ -292,6 +292,20 @@ and it should get reinitialized next time you make the mode.")
 (defvar mdmua-message-mode-hook nil
   "The MDMUA message mode hooks.")
 
+(defun mdmua-message-fill ()
+  "Allow filling of a paragraph even when read only.
+
+MDMUA message buffers are read only but paragraphs are sometimes
+not formatted properly so we provide this command to allow you to
+fill them.
+
+Also causes the buffer to be marked not modified."
+  (interactive)
+  (let ((buffer-read-only nil))
+    (fill-paragraph)
+    (set-buffer-modified-p nil)
+    ))
+
 (define-derived-mode mdmua-message-mode 
   message-mode  ;; parent
   "MDMUA Message"  ;; name
@@ -299,6 +313,7 @@ and it should get reinitialized next time you make the mode.")
   (unless mdmua-message--keymap-initializedp
     (define-key mdmua-message-mode-map "\C-ca" 'message-reply)
     (define-key mdmua-message-mode-map "\C-cw" 'message-wide-reply)
+    (define-key mdmua-message-mode-map "F" 'mdmua-message-fill)
     (setq mdmua-message--keymap-initializedp 't))
   ;;set the mode as a non-editor mode
   (put 'mdmua-message-mode 'mode-class 'special)
