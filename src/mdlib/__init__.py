@@ -231,19 +231,17 @@ class MdClient(object):
         msg = folder[msgkey]
         print msg.content
 
-    def getstruct(self, msgid, with_index=False, stream=sys.stdout):
+    def getstruct(self, msgid, as_json=False, stream=sys.stdout):
         """Get and print the whole message.
 
-        with_index indicates whether to print the index of the part or not.
+        as_json indicates whether to print the part list as JSON or not.
         """
-        parts = [msgpartpair for msgpartpair in self._get(msgid)]
-        index = 0
-        for hdr,part in parts:
-            if with_index:
-                print >>stream, "%d %s" % (index, part.get_content_type())
-            else:
-                print >>stream, part.get_content_type()
-            index += 1
+        parts = [part.get_content_type() for hdr, part in self._get(msgid)]
+        if as_json:
+            print >>stream, json.dumps(parts)
+        else:
+            for c in parts:
+                print >>stream, c
 
     def get(self, msgid, stream=sys.stdout):
         foldername, msgkey = msgid.split(SEPERATOR)

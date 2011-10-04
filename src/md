@@ -180,7 +180,7 @@ class MdCLI(cmdln.Cmdln):
         else:
             client.getrawpartid(message, partid, sys.stdout)
 
-    @cmdln.option("-i", "--index", help="show indexes against the parts", action="store_true")
+    @cmdln.option("-j", "--json", help="show the parts in json structure", action="store_true")
     def do_struct(self, subcmd, opts, message):
         """${cmd_name}: get the structure of the specified message
 
@@ -188,8 +188,8 @@ class MdCLI(cmdln.Cmdln):
         ${cmd_option_list}
         """
         client = MdClient(self.maildir)
-        indexes = getattr(opts, "index", False)
-        client.getstruct(message, with_index=indexes, stream=sys.stdout)
+        as_json = getattr(opts, "json", False)
+        client.getstruct(message, as_json=as_json, stream=sys.stdout)
 
     def do_file(self, subcmd, opts, message):
         """${cmd_name}: download the whole file of the message.
