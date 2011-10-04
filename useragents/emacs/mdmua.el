@@ -340,7 +340,7 @@ useful while we're developing mdmua"""
                             (json-read))))
             (kill-buffer structbuf)
             (with-current-buffer msgbuf
-              (make-variable-buffer-local 'mdmua-message-struct)
+              (make-variable-buffer-local 'mdmua-message--struct)
               (setq mdmua-message--struct partlist))
             (switch-to-buffer msgbuf)
             (beginning-of-buffer))
