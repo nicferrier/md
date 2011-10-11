@@ -641,7 +641,7 @@ with the folder on it."
        ;; user's display buffer's in a sort of repaint
        (let ((msg-lines (mdmua-util--buffer-lines)))
          (with-current-buffer "mdmua"
-           (let* ((folder-list (copy-list mdmua-folders))
+           (let* ((folder-list (copy-sequence mdmua-folders))
                   (folder-obj (assoc folder folder-list)))
              ;; Change the folders message list and set the open flag to true
              (plist-put (cdr folder-obj)
