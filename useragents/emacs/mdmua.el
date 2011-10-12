@@ -6,7 +6,7 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2009
-;; Version: 0.64
+;; Version: 0.71
 ;; Keywords: lisp
 
 ;; This file is NOT part of GNU Emacs.
@@ -341,31 +341,34 @@ useful while we're developing mdmua"""
 		current-prefix-arg))
   (let ((msgbuf (get-buffer-create (format "* mdmua-message-channel-%s *" key)))
         (structbuf (get-buffer-create (format "* mdmua-message-struct-channel-%s *" key))))
-    (with-mdmua-command (format "text %s" key) msgbuf
-      ((equal signal "finished\n")
-       (rename-buffer key)
-       ;; This is a trick from imapua - deals with dodgy line endings
-       (subst-char-in-region (point-min) (point-max) ?\r ?\ )
-       (mdmua-message-mode)
-       (with-mdmua-command (format "struct -j %s" key) structbuf
-         ;; Need to process the struct into something we can display
-         ((equal signal "finished\n")
-          (let ((partlist (save-excursion
-                            (beginning-of-buffer)
-                            (json-read))))
-            (kill-buffer structbuf)
-            (with-current-buffer msgbuf
-              (make-variable-buffer-local 'mdmua-message--struct)
-              (setq mdmua-message--struct partlist))
-            (switch-to-buffer msgbuf)
-            (beginning-of-buffer))
-          ))
-       )
-      ;; else
-      ('t
-       (message "mdmua open message got signal %s" signal)
-       (display-buffer msgbuf)
-       )
+    (if (get-buffer key)
+        (switch-to-buffer key)
+      (with-mdmua-command (format "text %s" key) msgbuf
+        ((equal signal "finished\n")
+         (rename-buffer key)
+         ;; This is a trick from imapua - deals with dodgy line endings
+         (subst-char-in-region (point-min) (point-max) ?\r ?\ )
+         (mdmua-message-mode)
+         (with-mdmua-command (format "struct -j %s" key) structbuf
+           ;; Need to process the struct into something we can display
+           ((equal signal "finished\n")
+            (let ((partlist (save-excursion
+                              (beginning-of-buffer)
+                              (json-read))))
+              (kill-buffer structbuf)
+              (with-current-buffer msgbuf
+                (make-variable-buffer-local 'mdmua-message--struct)
+                (setq mdmua-message--struct partlist))
+              (switch-to-buffer msgbuf)
+              (beginning-of-buffer))
+            ))
+         )
+        ;; else
+        ('t
+         (message "mdmua open message got signal %s" signal)
+         (display-buffer msgbuf)
+         )
+        )
       )
     )
   )
@@ -420,7 +423,7 @@ useful while we're developing mdmua"""
       ;; Now change the message stored there
       (plist-put message :flags (concat "T" (plist-get message :flags)))
       ;; And now update the text
-      (mdmua-render (mdmua-folders-list mdmua-folders))
+      (mdmua--render (mdmua-folders-list mdmua-folders))
       (let ((pos (text-property-any 
 		  (point-min)
 		  (point-max)
@@ -498,7 +501,7 @@ bWhen called interactively the message on the current line."
 
 (defun mdmua-message-render (message)
   "Render a message in a list.
-Called repeatedly by mdmua-render for all messages in open folders"
+Called repeatedly by mdmua--render for all messages in open folders"
   (propertize
    (format "% 22s  %30s  %s\n"
 	   (or (plist-get message :date)
@@ -616,7 +619,7 @@ key."
   (interactive (list (get-text-property (point) 'folder-name)))
   (let ((folder-obj (assoc folder-name mdmua-folders)))
     (plist-put (cdr folder-obj) :open nil)
-    (mdmua-render (mapcar (lambda (x) (car x)) mdmua-folders))))
+    (mdmua--render (mapcar (lambda (x) (car x)) mdmua-folders))))
 
 (defun mdmua-open-folder (folder-name)
   "Open the folder FOLDER-NAME.
