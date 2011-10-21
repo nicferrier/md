@@ -6,7 +6,7 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2009
-;; Version: 0.71
+;; Version: 0.72
 ;; Keywords: lisp
 
 ;; This file is NOT part of GNU Emacs.
@@ -327,6 +327,42 @@ Also causes the buffer to be marked not modified."
   ;;run the mode hooks
   (run-hooks 'mdmua-message-mode-hook)
   )
+
+(defun mdmua-message-open-part (message-key part-number)
+  "Open the specified PART-NUMBER from the specified MESSAGE-KEY."
+  (interactive 
+   (let* ((l mdmua-message--struct)
+          (collection 
+           (loop for e from 1 to (length l)
+                 collect (let ((n (- e 1)))
+                           (cons (format "%s {%d}" (elt l n) n) n))))
+          (msg-key (buffer-name))
+          (completion (completing-read  "Which part: " collection)))
+     (if (not (assoc completion collection))
+         (list msg-key completion)
+       (save-match-data 
+         (if (string-match 
+              "[^ ]+ {\\([0-9]+\\)}" completion)
+             (list msg-key (string-to-int (match-string 1 completion))))))))
+  (let* ((type (elt mdmua-message--struct part-number))
+         (command (mailcap-mime-info type))
+         (qkey (format "%s--%s" message-key part-number)) ; the qualified key
+         (partbuf (get-buffer-create 
+                  (format "* mdmua-message-channel-%s *" qkey))))
+    (if (get-buffer qkey)
+        (switch-to-buffer qkey)
+      (with-mdmua-command 
+        (format "rawpart -p %s %s | %s" ; ensure the command is async
+                part-number
+                message-key
+                (format command "-")) ; 'command' will have %s in it
+        partbuf
+        ;; sentinel commands
+        ((equal signal "finished\n")
+         (message "mdmua - finished viewing part %s of %s" part-number message-key))))))
+
+
+
 
 (defvar mdmua-message--struct '()
   "Contains the part structure of the message. Buffer local.")
