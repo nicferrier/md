@@ -314,6 +314,7 @@ Also causes the buffer to be marked not modified."
     (define-key mdmua-message-mode-map "\C-ca" 'message-reply)
     (define-key mdmua-message-mode-map "\C-cw" 'message-wide-reply)
     (define-key mdmua-message-mode-map "F" 'mdmua-message-fill)
+    (define-key mdmua-message-mode-map "p" 'mdmua-message-open-part)
     (setq mdmua-message--keymap-initializedp 't))
   ;;set the mode as a non-editor mode
   (put 'mdmua-message-mode 'mode-class 'special)
@@ -325,43 +326,7 @@ Also causes the buffer to be marked not modified."
   (setq buffer-read-only 't)
   (set-buffer-modified-p nil)
   ;;run the mode hooks
-  (run-hooks 'mdmua-message-mode-hook)
-  )
-
-(defun mdmua-message-open-part (message-key part-number)
-  "Open the specified PART-NUMBER from the specified MESSAGE-KEY."
-  (interactive 
-   (let* ((l mdmua-message--struct)
-          (collection 
-           (loop for e from 1 to (length l)
-                 collect (let ((n (- e 1)))
-                           (cons (format "%s {%d}" (elt l n) n) n))))
-          (msg-key (buffer-name))
-          (completion (completing-read  "Which part: " collection)))
-     (if (not (assoc completion collection))
-         (list msg-key completion)
-       (save-match-data 
-         (if (string-match 
-              "[^ ]+ {\\([0-9]+\\)}" completion)
-             (list msg-key (string-to-int (match-string 1 completion))))))))
-  (let* ((type (elt mdmua-message--struct part-number))
-         (command (mailcap-mime-info type))
-         (qkey (format "%s--%s" message-key part-number)) ; the qualified key
-         (partbuf (get-buffer-create 
-                  (format "* mdmua-message-channel-%s *" qkey))))
-    (if (get-buffer qkey)
-        (switch-to-buffer qkey)
-      (with-mdmua-command 
-        (format "rawpart -p %s %s | %s" ; ensure the command is async
-                part-number
-                message-key
-                (format command "-")) ; 'command' will have %s in it
-        partbuf
-        ;; sentinel commands
-        ((equal signal "finished\n")
-         (message "mdmua - finished viewing part %s of %s" part-number message-key))))))
-
-
+  (run-hooks 'mdmua-message-mode-hook))
 
 
 (defvar mdmua-message--struct '()
@@ -402,12 +367,7 @@ useful while we're developing mdmua"""
         ;; else
         ('t
          (message "mdmua open message got signal %s" signal)
-         (display-buffer msgbuf)
-         )
-        )
-      )
-    )
-  )
+         (display-buffer msgbuf))))))
 
 (defun mdmua-open-full (key)
   "Open the whole file of the message"
@@ -420,15 +380,71 @@ useful while we're developing mdmua"""
        (switch-to-buffer (process-buffer process))
        (rename-buffer key)
        (mdmua-message-mode)
-       (beginning-of-buffer)
-       )
+       (beginning-of-buffer))
       ;; else
       ('t
        (message "mdmua open message got signal %s" signal)
-       (display-buffer (process-buffer process))
-       )
-      ))
-  )
+       (display-buffer (process-buffer process))))))
+
+(defun mdmua-message-open-part (message-key part-number)
+  "Open the specified PART-NUMBER from the specified MESSAGE-KEY.
+
+Uses the mailcap library to find the viewer for the specified
+part and tries to open it with an asynchronous shell command,
+piping the part raw straight from md, something like this:
+
+ md rawpart -p 2 INBOX#231237612736 | viewer -
+
+Where the part being viewed is number 2 and the viewer specified
+in the mailcaps is 'viewer'.
+
+See 'mailcap-parse-mailcaps' for more information on mailcaps.
+
+In the near future I want this to support in built Emacs viewers
+via some mailcap syntax, for example:
+
+  text/xml; firefox %s; emacs-mdmua=emacs nxml-mode %s
+
+which would allow us to prioritize an Emacs specific viewer over
+a generic one, maybe even asking the user.
+
+This can be done like this:
+
+ (mailcap-mime-info type \"emacs-mdmua\")
+
+Then people can provide specific support for 'mdmua'."
+  (interactive 
+   (let* ((l mdmua-message--struct)
+          (collection 
+           ;; FIXME
+           ;; need to check that we have a viewer for each of these parts
+           (loop for e from 1 to (length l)
+                 collect (let ((n (- e 1)))
+                           (cons (format "%s {%d}" (elt l n) n) n))))
+          (msg-key (buffer-name))
+          (completion (completing-read  "Which part: " collection)))
+     (if (not (assoc completion collection))
+         (list msg-key completion)
+       (save-match-data 
+         (if (string-match 
+              "[^ ]+ {\\([0-9]+\\)}" completion)
+             (list msg-key (string-to-int (match-string 1 completion))))))))
+  (let* ((type (elt mdmua-message--struct part-number))
+         (command (mailcap-mime-info type))
+         (qkey (format "%s--%s" message-key part-number)) ; the qualified key
+         (partbuf (get-buffer-create 
+                  (format "* mdmua-message-channel-%s *" qkey))))
+    (if (get-buffer qkey)
+        (switch-to-buffer qkey)
+      (with-mdmua-command 
+        (format "rawpart -p %s %s | %s" ; ensure the command is async
+                part-number
+                message-key
+                (format command "-")) ; 'command' will have %s in it
+        partbuf
+        ;; sentinel commands
+        ((equal signal "finished\n")
+         (message "mdmua - finished viewing part %s of %s" part-number message-key))))))
 
 
 ;; Folder funcs
@@ -468,8 +484,7 @@ useful while we're developing mdmua"""
 	(goto-char pos)
 	(next-line))
       )
-    (kill-buffer (process-buffer proc))
-    )))
+    (kill-buffer (process-buffer proc)))))
 
 (defun mdmua-trash-marked ()
   (interactive)
@@ -500,8 +515,7 @@ useful while we're developing mdmua"""
             (make-local-variable 'trash-info)
             (seq trash-info `(:folder-buffer ,buf
                                              :message-key ,message 
-                                             :folder-name ,folder)))
-          )))))
+                                             :folder-name ,folder))))))))
 
 (defun mdmua-trash-message-x (message folder)
   "Delete the specified messages
@@ -519,8 +533,7 @@ bWhen called interactively the message on the current line."
       (make-local-variable 'trash-info)
       (setq trash-info `(:folder-buffer ,buf
 				       :message-key ,message 
-				       :folder-name ,folder)))
-    ))
+				       :folder-name ,folder)))))
   
 (defun mdmua-prev-folder()
   (interactive)
@@ -547,8 +560,7 @@ Called repeatedly by mdmua--render for all messages in open folders"
 	       (elt (plist-get message :from) 1)
 	       "nobody@nowhere")
 	   (or (plist-get message :subject)
-	       " ")
-	   )
+	       " "))
    'key (plist-get message :key)
    'folder (plist-get message :folder)
    ;; This should be done with syntax instead of directly
@@ -558,8 +570,7 @@ Called repeatedly by mdmua--render for all messages in open folders"
 	  ((member ?S (string-to-list (plist-get message :flags)))
 	   '(foreground-color . "Black"))
 	  ('t
-	   '(foreground-color . "Blue"))))
-   )
+	   '(foreground-color . "Blue")))))
 
 (defun mdmua--render (folders)
   "Render the state of the folders.
@@ -646,10 +657,7 @@ key."
            (kill-buffer folderbuf)))
        )
       ('t
-       (message "mdmua: something went wrong listing folders?"))
-       )
-    )
-  )
+       (message "mdmua: something went wrong listing folders?")))))
 
 (defun mdmua-close-folder (folder-name)
   (interactive (list (get-text-property (point) 'folder-name)))
@@ -692,12 +700,7 @@ with the folder on it."
                                     (error nil)))
                                 msg-lines))
              (plist-put (cdr folder-obj) :open 't)
-             (mdmua--render (mdmua-folders-list folder-list))
-             )
-           (kill-buffer lstbuf)))
-       )
-      )
-    )
-  )
+             (mdmua--render (mdmua-folders-list folder-list)))
+           (kill-buffer lstbuf)))))))
 
 ;;; End
