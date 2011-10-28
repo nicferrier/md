@@ -434,8 +434,11 @@ Then people can provide specific support for 'mdmua'."
          (qkey (format "%s--%s" message-key part-number)) ; the qualified key
          (partbuf (get-buffer-create 
                   (format "* mdmua-message-channel-%s *" qkey))))
+    (if (not command)
+        (error "Mdmua needs a command to read a part %s" type)) 
     (if (get-buffer qkey)
         (switch-to-buffer qkey)
+      ;; FIXME - really I want to allow editing the command
       (with-mdmua-command 
         (format "rawpart -p %s %s | %s" ; ensure the command is async
                 part-number
