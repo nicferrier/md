@@ -121,13 +121,17 @@ debugging tool so it's good to keep around.")
 			  (cdr el)))))))
 
 (defmacro with-mdmua-shell-command (command buffer &rest sentinel-cond)
-  "This is a with-process-shell-command.
+  "Executes the COMMAND with the SENTINEL-COND callback.
+
+This is a with-process-shell-command .
+
+BUFFER is passed directly to 'start-process-shell-command'.
 
 This version does not interpolate the correct md binary. It just
 presumes you are executing a sane shell command.
 
 SENTINEL-COND is the inner part of a cond to match the
-signal. 
+signal.
 
 For example:
 
@@ -164,11 +168,11 @@ Additionally, the current buffer is set to the buffer of the process."
   )
 
 (defmacro with-mdmua-command (command buffer &rest sentinel-cond)
-  "Run an mdmua command with the md binary.
+  "Run an mdmua COMMAND with the md binary.
 
-See WITH-MDMUA-SHELL-COMMAND which this uses but just ensures the
-correct mdmua binary is used from MDMUA-MD-BIN-PATH and with the
-configured MDMUA-MAILDIR."
+See 'with-mdmua-shell-command' which this uses but just ensures the
+correct mdmua binary is used from 'mdmua-md-bin-path' and with the
+configured 'mdmua-maildir'."
   (declare (indent defun))
   (let ((cmdvar (make-symbol "cmd")))
     `(let ((,cmdvar ,command))
@@ -639,6 +643,34 @@ key."
 		 folders))))
     (error nil))
   )
+
+
+(defun mdmua-on-list (md-buffer md-command messages)
+  "Execute the MD-COMMAND on each of the MESSAGES."
+  (interactive
+   (let* ((buffer (current-buffer)))
+     (list
+      buffer
+      (read-from-minibuffer "Command: ")
+      ;; Now try and get a list of the messages
+      (with-current-buffer buffer
+        (save-excursion
+          (let ((end (region-end)))
+            (goto-char (region-beginning))
+            (loop
+             until (>= (point) end)
+             collect
+             (let ((key
+                    (plist-get (text-properties-at (point)) 'key)))
+               (forward-line 1)
+               key))))))))
+  (let ((workbuf (get-buffer-create "*mdmua-work*")))
+    (loop for msg in messages
+          do (with-mdmua-command
+               (format "%s %s" md-command msg) ; command to send
+               workbuf ; buffer to use
+               ((equal signal "finished\n")
+                (message "mdmua: done %s on %s" md-command msg))))))
 
 (defun mdmua-folders-list (folder-struct)
   "Return just the folders from the folder struct"
