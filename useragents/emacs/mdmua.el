@@ -35,7 +35,7 @@
 ;; 'md' can be found in pypi here: http://pypi.python.org/pypi/md
 
 ;;; Development Notes
-;; 
+;;
 ;; 2011-10-04 Problems with the folder view - I started off using
 ;; property lists for carrying the folder state, but I think that was
 ;; a mistake. It would be better to use record objects.
@@ -87,8 +87,8 @@ debugging tool so it's good to keep around.")
 
 (defun mdmua-util--strip (str)
   "Standard line break removal"
-  (or (and (string-match "\\(.*\\)\n" str) 
-	   (match-string 1 str))
+  (or (and (string-match "\\(.*\\)\n" str)
+           (match-string 1 str))
       str))
 
 (defun mdmua-util--buffer-lines ()
@@ -97,14 +97,14 @@ debugging tool so it's good to keep around.")
     (save-excursion
       (beginning-of-buffer)
       (let ((pos (point)))
-	(while (not (eobp))
-	  (forward-visible-line 1)
-	  (setq lst (append lst 
-			    (list 
-			     (mdmua-util--strip
-			      (buffer-substring-no-properties pos (point))))))
-	  (setq pos (point)))
-	))
+        (while (not (eobp))
+          (forward-visible-line 1)
+          (setq lst (append lst
+                            (list
+                             (mdmua-util--strip
+                              (buffer-substring-no-properties pos (point))))))
+          (setq pos (point)))
+        ))
     lst))
 
 (defun mdmua--string-to-plist-symbol (symbol)
@@ -115,10 +115,10 @@ debugging tool so it's good to keep around.")
   "Convert an alist to a plist"
   (let ((plist '()))
     (dolist (el alist plist)
-      (setq plist 
-	    (append plist 
-		    (list (mdmua--string-to-plist-symbol (symbol-name (car el)))
-			  (cdr el)))))))
+      (setq plist
+            (append plist
+                    (list (mdmua--string-to-plist-symbol (symbol-name (car el)))
+                          (cdr el)))))))
 
 (defmacro with-mdmua-shell-command (command buffer &rest sentinel-cond)
   "Executes the COMMAND with the SENTINEL-COND callback.
@@ -176,10 +176,10 @@ configured 'mdmua-maildir'."
   (declare (indent defun))
   (let ((cmdvar (make-symbol "cmd")))
     `(let ((,cmdvar ,command))
-       (with-mdmua-shell-command 
-         (format "%s -M %s %s" 
-                 mdmua-md-bin-path 
-                 (expand-file-name mdmua-maildir) 
+       (with-mdmua-shell-command
+         (format "%s -M %s %s"
+                 mdmua-md-bin-path
+                 (expand-file-name mdmua-maildir)
                  ,cmdvar)
          ,buffer
          ,@sentinel-cond))))
