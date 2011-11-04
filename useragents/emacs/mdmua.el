@@ -194,8 +194,9 @@ configured 'mdmua-maildir'."
   (make-local-variable 'mdmua-folders)
   (setq buffer-read-only 't)
   (setq mdmua-folders '("INBOX"))
-  (make-local-variable 'mdmua-pulling)
-  (setq mdmua-pulling "no")
+  (when (not (local-variable-p 'mdmua-pulling))
+    (make-local-variable 'mdmua-pulling)
+    (setq mdmua-pulling "no"))
   ;; Got to define a mode-map
   (unless mdmua-mode-map
     (progn
