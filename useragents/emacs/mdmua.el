@@ -206,6 +206,8 @@ configured 'mdmua-maildir'."
       (define-key mdmua-mode-map ">" 'mdmua-next-folder)
       (define-key mdmua-mode-map "<" 'mdmua-prev-folder)
       (define-key mdmua-mode-map "d" 'mdmua-trash-message)
+      (define-key mdmua-mode-map "r" 'mdmua-on-list)
+      (define-key mdmua-mode-map "R" 'mdmua-on-regex)
       (define-key mdmua-mode-map "p" 'mdmua-pull))
     )
   (use-local-map mdmua-mode-map)
@@ -647,24 +649,29 @@ key."
 
 
 (defun mdmua-on-list (md-buffer md-command messages)
-  "Execute the MD-COMMAND on each of the MESSAGES."
+  "Execute the MD-COMMAND on each of the MESSAGES.
+
+Interactively this operates on the region or gives an error if
+there is not active region."
   (interactive
-   (let* ((buffer (current-buffer)))
-     (list
-      buffer
-      (read-from-minibuffer "Command: ")
-      ;; Now try and get a list of the messages
-      (with-current-buffer buffer
-        (save-excursion
-          (let ((end (region-end)))
-            (goto-char (region-beginning))
-            (loop
-             until (>= (point) end)
-             collect
-             (let ((key
-                    (plist-get (text-properties-at (point)) 'key)))
-               (forward-line 1)
-               key))))))))
+   (if (not (use-region-p))
+       (error "mdmua: no active region to find messages")
+     (let* ((buffer (current-buffer)))
+       (list
+        buffer
+        (read-from-minibuffer "Command: ")
+        ;; Now try and get a list of the messages
+        (with-current-buffer buffer
+          (save-excursion
+            (let ((end (region-end)))
+              (goto-char (region-beginning))
+              (loop
+               until (>= (point) end)
+               collect
+               (let ((key
+                      (plist-get (text-properties-at (point)) 'key)))
+                 (forward-line 1)
+                 key)))))))))
   (let ((workbuf (get-buffer-create "*mdmua-work*")))
     (loop for msg in messages
           do (with-mdmua-command
@@ -672,6 +679,35 @@ key."
                workbuf ; buffer to use
                ((equal signal "finished\n")
                 (message "mdmua: done %s on %s" md-command msg))))))
+
+(defun mdmua-on-regex (md-buffer md-command regex)
+  "Execute the MD-COMMAND on any message that matches REGEX."
+  (interactive
+   (let* ((buffer (current-buffer)))
+     (list
+      buffer
+      (read-from-minibuffer "Command: ")
+      (read-from-minibuffer "Regex: "))))
+  (mdmua-on-list
+   md-buffer
+   md-command
+   (with-current-buffer md-buffer
+     (save-excursion
+       (goto-char (region-beginning))
+       (or
+        (loop
+         while (re-search-forward
+                regex
+                (if (use-region-p)
+                    (region-end)
+                  (point-max))
+                t)
+         collect
+         (let ((key
+                (plist-get (text-properties-at (point)) 'key)))
+           (forward-line 1)
+           key))
+        (error "mdmua: no messages match '%s'" regex))))))
 
 (defun mdmua-folders-list (folder-struct)
   "Return just the folders from the folder struct"
