@@ -95,7 +95,7 @@ debugging tool so it's good to keep around.")
   "A simple tool to return a list of all the lines in a buffer."
   (let ((lst '()))
     (save-excursion
-      (beginning-of-buffer)
+      (goto-char (point-min))
       (let ((pos (point)))
         (while (not (eobp))
           (forward-visible-line 1)
@@ -216,35 +216,39 @@ configured 'mdmua-maildir'."
 (defun mdmua-open ()
   (interactive)
   ;; Test to see if we're opening a folder or not
-  (if (save-excursion 
-	(beginning-of-line)
-	(re-search-forward "^[^ ]" (line-end-position) 't))
+  (if (save-excursion
+        (goto-char (point-min))
+        (re-search-forward "^[^ ]" (line-end-position) 't))
       (call-interactively 'mdmua-open-folder)
     (call-interactively 'mdmua-open-message)))
 
 ;; Mandling key'd messages
 
 (defun mdmua-pastebuffer-key (key)
-  """Puts the key in the pastebuffer so you can find the message with other means"""
-  (interactive (list 
-		(plist-get (text-properties-at (point)) 'key)))
-  (with-temp-buffer 
+  "Puts the KEY in the pastebuffer.
+
+Once in the pastebuffer you can find the message with other
+means."
+  (interactive
+   (list
+    (plist-get (text-properties-at (point)) 'key)))
+  (with-temp-buffer
     (insert key)
     (clipboard-kill-ring-save (point-min) (point-max))))
 
 (defun mdmua-message-list-get (folder-buffer folder-name key)
   "Retrieve the message object specified by folder-name and key."
-  (let ((msglist 
-	 (plist-get 
-	  (cdr (assoc folder-name (with-current-buffer folder-buffer
-				    mdmua-folders)))
-	  :messages)))
+  (let ((msglist
+         (plist-get
+          (cdr (assoc folder-name (with-current-buffer folder-buffer
+                                    mdmua-folders)))
+          :messages)))
     (catch 'foo
-      (mapcar 
+      (mapcar
        (lambda (msg)
-	 (if (equal key (plist-get msg :key))
-	     (progn
-	       (throw 'foo msg))))
+         (if (equal key (plist-get msg :key))
+             (progn
+               (throw 'foo msg))))
        msglist))))
 
 
@@ -313,7 +317,7 @@ Also causes the buffer to be marked not modified."
     (set-buffer-modified-p nil)
     ))
 
-(define-derived-mode mdmua-message-mode 
+(define-derived-mode mdmua-message-mode
   message-mode  ;; parent
   "MDMUA Message"  ;; name
   "MDMUA Msg \\{mdmua-message-mode-map}" ;; docstring
@@ -340,15 +344,17 @@ Also causes the buffer to be marked not modified."
   "Contains the part structure of the message. Buffer local.")
 
 (defun mdmua-open-message (key &optional no-render)
-  """Open the message with key.
+  "Open the message with KEY.
 
-Specify the prefix arg to not-render the message. This can be
-useful while we're developing mdmua"""
-  (interactive (list 
-		(plist-get (text-properties-at (point)) 'key)
-		current-prefix-arg))
+Specify the prefix arg to NO-RENDER the message.  This can be
+useful while we're developing mdmua."
+  (interactive
+   (list
+    (plist-get (text-properties-at (point)) 'key)
+    current-prefix-arg))
   (let ((msgbuf (get-buffer-create (format "* mdmua-message-channel-%s *" key)))
-        (structbuf (get-buffer-create (format "* mdmua-message-struct-channel-%s *" key))))
+        (structbuf (get-buffer-create
+                    (format "* mdmua-message-struct-channel-%s *" key))))
     (if (get-buffer key)
         (switch-to-buffer key)
       (with-mdmua-command (format "text %s" key) msgbuf
@@ -361,16 +367,14 @@ useful while we're developing mdmua"""
            ;; Need to process the struct into something we can display
            ((equal signal "finished\n")
             (let ((partlist (save-excursion
-                              (beginning-of-buffer)
+                              (goto-char (point-min))
                               (json-read))))
               (kill-buffer structbuf)
               (with-current-buffer msgbuf
                 (make-variable-buffer-local 'mdmua-message--struct)
                 (setq mdmua-message--struct partlist))
               (switch-to-buffer msgbuf)
-              (beginning-of-buffer))
-            ))
-         )
+              (goto-char (point-min))))))
         ;; else
         ('t
          (message "mdmua open message got signal %s" signal)
@@ -378,8 +382,9 @@ useful while we're developing mdmua"""
 
 (defun mdmua-open-full (key)
   "Open the whole file of the message"
-  (interactive (list 
-		(plist-get (text-properties-at (point)) 'key)))
+  (interactive
+   (list
+    (plist-get (text-properties-at (point)) 'key)))
   (let ((buf (get-buffer-create (format "* mdmua-message-channel-%s *" key))))
     (with-mdmua-command (format "file %s" key) buf
       ;; The sentinel code
@@ -387,7 +392,7 @@ useful while we're developing mdmua"""
        (switch-to-buffer (process-buffer process))
        (rename-buffer key)
        (mdmua-message-mode)
-       (beginning-of-buffer))
+       (goto-char (point-min)))
       ;; else
       ('t
        (message "mdmua open message got signal %s" signal)
@@ -420,9 +425,9 @@ This can be done like this:
  (mailcap-mime-info type \"emacs-mdmua\")
 
 Then people can provide specific support for 'mdmua'."
-  (interactive 
+  (interactive
    (let* ((l mdmua-message--struct)
-          (collection 
+          (collection
            ;; FIXME
            ;; need to check that we have a viewer for each of these parts
            (loop for e from 1 to (length l)
@@ -432,21 +437,21 @@ Then people can provide specific support for 'mdmua'."
           (completion (completing-read  "Which part: " collection)))
      (if (not (assoc completion collection))
          (list msg-key completion)
-       (save-match-data 
-         (if (string-match 
+       (save-match-data
+         (if (string-match
               "[^ ]+ {\\([0-9]+\\)}" completion)
-             (list msg-key (string-to-int (match-string 1 completion))))))))
+             (list msg-key (string-to-number (match-string 1 completion))))))))
   (let* ((type (elt mdmua-message--struct part-number))
          (command (mailcap-mime-info type))
          (qkey (format "%s--%s" message-key part-number)) ; the qualified key
-         (partbuf (get-buffer-create 
+         (partbuf (get-buffer-create
                   (format "* mdmua-message-channel-%s *" qkey))))
     (if (not command)
-        (error "Mdmua needs a command to read a part %s" type)) 
+        (error "Mdmua needs a command to read a part %s" type))
     (if (get-buffer qkey)
         (switch-to-buffer qkey)
       ;; FIXME - really I want to allow editing the command
-      (with-mdmua-command 
+      (with-mdmua-command
         (format "rawpart -p %s %s | %s" ; ensure the command is async
                 part-number
                 message-key
@@ -466,10 +471,10 @@ Then people can provide specific support for 'mdmua'."
     (mdmua-prev-folder)
     (let ((inhibit-read-only 't))
       (while (re-search-forward regex nil 't)
-        (add-text-properties 
-         (point-at-bol) 
-         (point-at-eol) 
-         `(marked t 
+        (add-text-properties
+         (point-at-bol)
+         (point-at-eol)
+         `(marked t
                   face (foreground-color . "green")))))))
 
 
@@ -477,74 +482,76 @@ Then people can provide specific support for 'mdmua'."
   (cond
    ((equal signal "finished\n")
     ;; Get the message from the folder buffer's message store
-    (let ((message 
-	   (with-current-buffer (process-buffer proc)
-	     (mdmua-message-list-get folder-buffer 
-				     folder-name 
-				     message-key))))
+    (let ((message
+           (with-current-buffer (process-buffer proc)
+             (mdmua-message-list-get folder-buffer
+                                     folder-name
+                                     message-key))))
       ;; Now change the message stored there
       (plist-put message :flags (concat "T" (plist-get message :flags)))
       ;; And now update the text
       (mdmua--render (mdmua-folders-list mdmua-folders))
-      (let ((pos (text-property-any 
-		  (point-min)
-		  (point-max)
-		  'key 
-		  (plist-get message :key))))
-	(goto-char pos)
-	(next-line))
+      (let ((pos (text-property-any
+                  (point-min)
+                  (point-max)
+                  'key
+                  (plist-get message :key))))
+        (goto-char pos)
+        (next-line))
       )
     (kill-buffer (process-buffer proc)))))
 
 (defun mdmua-trash-marked ()
   (interactive)
   (save-excursion
-    (beginning-of-buffer)
+    (goto-char (point-min))
     (let ((pos (next-single-property-change (point) 'marked))
-	  (marked '()))
+          (marked '()))
       (while pos
-	(setq marked 
-	      (append marked (list  
-			      (cons
-			       (plist-get (text-properties-at pos) 'folder)
-			       (plist-get (text-properties-at pos) 'key)))))
-	(setq pos (next-single-property-change pos 'marked)))
+        (setq marked
+              (append
+               marked
+               (list
+                (cons
+                 (plist-get (text-properties-at pos) 'folder)
+                 (plist-get (text-properties-at pos) 'key)))))
+        (setq pos (next-single-property-change pos 'marked)))
       ;; need to transform (folder-name . message-key) into message-key
-      (let ((keys 
-             (mapconcat 
+      (let ((keys
+             (mapconcat
               (lambda (x)(cdr x)) marked " ")))
         (let ((buf (current-buffer))
-              (proc 
-               (start-process-shell-command 
+              (proc
+               (start-process-shell-command
                 ;; TODO:::
                 ;; rewrite md so it can take message lists on stdin
                 ;; then send trashed messages on stdin
-                "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
+                "mdmua"
+                "mdmua-channel"
+                (concat mdmua-md-bin-path "trash" message))))
           (set-process-sentinel proc 'mdmua--sentinel-trash)
           (with-current-buffer (process-buffer proc)
             (make-local-variable 'trash-info)
             (seq trash-info `(:folder-buffer ,buf
-                                             :message-key ,message 
+                                             :message-key ,message
                                              :folder-name ,folder))))))))
 
-(defun mdmua-trash-message-x (message folder)
-  "Delete the specified messages
+(defun mdmua-trash-message (message buffer)
+  "Delete the specified MESSAGE in the specified BUFFER.
 
-bWhen called interactively the message on the current line."
-  (interactive (list 
-		(plist-get (text-properties-at (point)) 'key)
-		(plist-get (text-properties-at (point)) 'folder)))
-  (let ((buf (current-buffer))
-	(proc 
-	 (start-process-shell-command 
-	  "mdmua" "mdmua-channel" mdmua-md-bin-path "trash" message)))
-    (set-process-sentinel proc 'mdmua--sentinel-trash)
-    (with-current-buffer (process-buffer proc)
-      (make-local-variable 'trash-info)
-      (setq trash-info `(:folder-buffer ,buf
-				       :message-key ,message 
-				       :folder-name ,folder)))))
-  
+When called interactively, the message on the current line."
+  (interactive
+   (list
+    (plist-get (text-properties-at (point)) 'key)
+    (current-buffer)))
+  (let ((work-buf (get-buffer-create "*mdmua-work*")))
+    (with-current-buffer buffer
+      (with-mdmua-command
+        (concat "rm " message)
+        work-buf
+        ((equal signal "finished\n")
+         (message "mdmua: deleted %s" message))))))
+
 (defun mdmua-prev-folder()
   (interactive)
   (beginning-of-line)
@@ -558,29 +565,30 @@ bWhen called interactively the message on the current line."
 
 ;; Message lists
 
-(defun mdmua-message-render (message)
-  "Render a message in a list.
-Called repeatedly by mdmua--render for all messages in open folders"
+(defun mdmua--message-render (message)
+  "Render MESSAGE in a folder list.
+
+Called repeatedly by 'mdmua--render' for all messages in open
+folders."
   (propertize
    (format "% 22s  %30s  %s\n"
-	   (or (plist-get message :date)
-
-	       "0-00-00")
-	   (or (elt (plist-get message :from) 0)
-	       (elt (plist-get message :from) 1)
-	       "nobody@nowhere")
-	   (or (plist-get message :subject)
-	       " "))
+           (or (plist-get message :date)
+               "0-00-00")
+           (or (elt (plist-get message :from) 0)
+               (elt (plist-get message :from) 1)
+               "nobody@nowhere")
+           (or (plist-get message :subject)
+               " "))
    'key (plist-get message :key)
    'folder (plist-get message :folder)
    ;; This should be done with syntax instead of directly
    'face (cond
-	  ((member ?T (string-to-list (plist-get message :flags)))
-	   '(foreground-color . "Red"))
-	  ((member ?S (string-to-list (plist-get message :flags)))
-	   '(foreground-color . "Black"))
-	  ('t
-	   '(foreground-color . "Blue")))))
+          ((member ?T (string-to-list (plist-get message :flags)))
+           '(foreground-color . "Red"))
+          ((member ?S (string-to-list (plist-get message :flags)))
+           '(foreground-color . "Black"))
+          ('t
+           '(foreground-color . "Blue")))))
 
 (defun mdmua--render (folders)
   "Render the state of the folders.
@@ -610,8 +618,8 @@ The structure is:
 
 So to retrieve the 3rd message from the INBOX:
 
- (elt (plist-get 
-          (cdr (assoc \"INBOX\" mdmua-folders)) 
+ (elt (plist-get
+          (cdr (assoc \"INBOX\" mdmua-folders))
           :messages)
       3)
 
@@ -621,32 +629,37 @@ key."
   ;; ... it takes no account of existing display
   (condition-case nil
       (let ((inhibit-read-only 't))
-	(save-excursion
-	  (delete-region (point-min) (point-max))
-	  (setq mdmua-folders
-		(mapcar 
-		 (lambda (folder-name)
-		   ;; Render a folder
-		   (insert (propertize
-			    (concat folder-name "\n")
-			    'folder-name folder-name))
-		   ;; Rebuild the assoc item for the folder
-		   (let ((folder-obj (assoc folder-name mdmua-folders)))
-		     (if (plist-get (cdr folder-obj) :open)
-			 (progn
-			   (mapc (lambda (msg)
-                                   (if (plist-get msg :key)
-                                       (insert (mdmua-message-render msg))))
-				 (plist-get (cdr folder-obj) :messages))
-			   `(,folder-name 
-			     . (:open 't :messages ,(plist-get (cdr folder-obj) :messages))))
-		       ;; Else
-		       `(,folder-name . (:open nil :messages '()))))
-		   )
-		 folders))))
-    (error nil))
-  )
+        (save-excursion
+          (delete-region (point-min) (point-max))
+          (setq
+           mdmua-folders
+           (mapcar
+            (lambda (folder-name)
+              ;; Render a folder
+              (insert (propertize
+                       (concat folder-name "\n")
+                       'folder-name folder-name))
+              ;; Rebuild the assoc item for the folder
+              (let ((folder-obj (assoc folder-name mdmua-folders)))
+                (if (not (plist-get (cdr folder-obj) :open))
+                    `(,folder-name . (:open nil :messages '()))
+                  (mapc
+                   (lambda (msg)
+                     (if (plist-get msg :key)
+                         (insert (mdmua--message-render msg))))
+                   (plist-get (cdr folder-obj) :messages))
+                  `(,folder-name
+                    . (:open 't
+                             :messages
+                             ,(plist-get (cdr folder-obj) :messages))))))
+            folders))))
+    (error nil)))
 
+(defvar mdmua-on-list-history '()
+  "The history for the command with list and regex commands.")
+
+(defvar mdmua-on-regex-history '()
+  "The history for the regex with the regex command.")
 
 (defun mdmua-on-list (md-buffer md-command messages)
   "Execute the MD-COMMAND on each of the MESSAGES.
@@ -659,7 +672,7 @@ there is not active region."
      (let* ((buffer (current-buffer)))
        (list
         buffer
-        (read-from-minibuffer "Command: ")
+        (read-from-minibuffer "Command: " nil nil nil 'mdmua-on-list-history)
         ;; Now try and get a list of the messages
         (with-current-buffer buffer
           (save-excursion
@@ -686,8 +699,8 @@ there is not active region."
    (let* ((buffer (current-buffer)))
      (list
       buffer
-      (read-from-minibuffer "Command: ")
-      (read-from-minibuffer "Regex: "))))
+      (read-from-minibuffer "Command: " nil nil nil 'mdmua-on-list-history)
+      (read-from-minibuffer "Regex: " nil nil nil 'mdmua-on-regex-history))))
   (mdmua-on-list
    md-buffer
    md-command
@@ -696,12 +709,13 @@ there is not active region."
        (goto-char (region-beginning))
        (or
         (loop
-         while (re-search-forward
-                regex
-                (if (use-region-p)
-                    (region-end)
-                  (point-max))
-                t)
+         while
+         (re-search-forward
+          regex
+          (if (use-region-p)
+              (region-end)
+            (point-max))
+          t)
          collect
          (let ((key
                 (plist-get (text-properties-at (point)) 'key)))
@@ -719,7 +733,7 @@ there is not active region."
   (let ((folderbuf (get-buffer-create "* mdmua-folders *")))
     (with-mdmua-command "lsfolders" folderbuf
       ((equal signal "finished\n")
-       ;; we need to read the lines in the buffer and put them into the 
+       ;; we need to read the lines in the buffer and put them into the
        ;; user's display buffer's folder list
        ;; ... and then repaint
        (let ((folders (mdmua-util--buffer-lines)))
@@ -745,7 +759,7 @@ with the folder on it."
   (interactive (list (get-text-property (point) 'folder-name)))
   (let ((folder-obj (assoc folder-name mdmua-folders)))
     (if (plist-get (cdr folder-obj) :open)
-	(call-interactively 'mdmua-close-folder)
+        (call-interactively 'mdmua-close-folder)
       (mdmua-list folder-name))))
 
 (defun mdmua-list (folder)
@@ -756,7 +770,7 @@ with the folder on it."
          (lstbuf (get-buffer-create (format "* mdmua-list-%s *" folder))))
     (with-mdmua-command lstcommand lstbuf
       ((equal signal "finished\n")
-       ;; We need to read the lines in the buffer and put them into the 
+       ;; We need to read the lines in the buffer and put them into the
        ;; user's display buffer's in a sort of repaint
        (let ((msg-lines (mdmua-util--buffer-lines)))
          (with-current-buffer "mdmua"
@@ -775,4 +789,4 @@ with the folder on it."
              (mdmua--render (mdmua-folders-list folder-list)))
            (kill-buffer lstbuf)))))))
 
-;;; End
+;;; end of mdmua.el
