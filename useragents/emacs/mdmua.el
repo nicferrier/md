@@ -231,6 +231,7 @@ done."
                 (forward-line)
                 "")))
        (sort-lines nil (point-min) (point-max))
+       (kill-buffer lstbuf)
        ;; Call the continuation?
        (when callback
          (funcall callback outbuf))
@@ -281,7 +282,7 @@ Optionally look in the specified buffer."
     (get-text-property (point) 'folder-name)
     (current-buffer)))
   (let ((folder-buf (or folder-buffer (current-buffer))))
-    (mdmua-list2
+    (mdmua-list
      folder-name
      (lambda (buffer)
        (with-current-buffer folder-buffer
@@ -290,7 +291,8 @@ Optionally look in the specified buffer."
              (goto-char (point-min))
              (re-search-forward (concat "^" folder-name "$") nil t)
              (insert "\n")
-             (insert-buffer-substring buffer))))))))
+             (insert-buffer-substring buffer)
+             (kill-buffer buffer))))))))
 
 (defun mdmua-close-folder (folder-name)
   "Close the specified FOLDER-NAME."
