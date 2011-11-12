@@ -58,6 +58,8 @@
 
 (require 'json)
 
+(eval-when-compile (require 'cl))
+
 (defvar mdmua-buffer '()
   "The buffer where everything is rendered.")
 
@@ -107,18 +109,6 @@ debugging tool so it's good to keep around.")
         ))
     lst))
 
-(defun mdmua--string-to-plist-symbol (symbol)
-  "Convert a string to a plist symbol"
-  (car (read-from-string (concat ":" symbol))))
-
-(defun mdmua--alist-to-plist (alist)
-  "Convert an alist to a plist"
-  (let ((plist '()))
-    (dolist (el alist plist)
-      (setq plist
-            (append plist
-                    (list (mdmua--string-to-plist-symbol (symbol-name (car el)))
-                          (cdr el)))))))
 
 (defmacro with-mdmua-shell-command (command buffer &rest sentinel-cond)
   "Executes the COMMAND with the SENTINEL-COND callback.
@@ -187,13 +177,145 @@ configured 'mdmua-maildir'."
 
 ;; Main program
 
+(defun mdmua--msg-render (msg folder)
+  "Format and propertize the MSG in the FOLDER."
+  (propertize
+   (format "% 22s  %30s  %s"
+           (or (aget msg 'date)
+               "0-00-00")
+           (or (elt (aget msg 'from) 0)
+               (elt (aget msg 'from) 1)
+               "nobody@nowhere")
+           (or (aget msg 'subject)
+               " "))
+   'key (aget msg 'key)
+   'folder folder
+   ;; This should be done with syntax instead of
+   ;; directly
+   'face
+   (let* ((flags (aget msg 'flags))
+          (flags-list (string-to-list flags)))
+     (cond
+      ((member ?T flags-list)
+       '(foreground-color . "Red"))
+      ((member ?S flags-list)
+       '(foreground-color . "Black"))
+      (t
+       '(foreground-color . "Blue"))))))
+
+(defun mdmua-list (folder &optional callback)
+  "List the messages in FOLDER.
+
+Makes a hidden buffer for the folder with the intention that the
+buffer will act as a cache for the folder.
+
+If CALLBACK is provided it is called with the buffer when all is
+done."
+  (interactive "MFolder: ")
+  (let* ((folderref (if (equal folder "INBOX") "" folder))
+         (lstcommand (format "lisp -r %s" folderref))
+         (lstbuf (generate-new-buffer (format " *mdmua-list-%s* " folder)))
+         (outbuf (generate-new-buffer (format " *mdmua-list-buf-%s* " folder)))
+         (do-switch (called-interactively-p 'interactive)))
+    (with-mdmua-command lstcommand lstbuf
+      ((equal signal "finished\n")
+       (goto-char (point-min))
+       (loop while (not (eobp))
+             do
+             (condition-case nil
+                 (let ((msg (json-read)))
+                   (when msg
+                     (with-current-buffer outbuf
+                       (insert (mdmua--msg-render msg folder) "\n"))))
+               (error
+                (forward-line)
+                "")))
+       (sort-lines nil (point-min) (point-max))
+       ;; Call the continuation?
+       (when callback
+         (funcall callback outbuf))
+       ;; Now we move the contents of the outbuf
+       (when do-switch
+         (switch-to-buffer outbuf))))
+    ;; Return the buffer
+    outbuf))
+
+(defun mdmua-folders (&optional buffer)
+  "List the folders into a buffer."
+  (interactive)
+  (let ((folderbuf (or buffer (get-buffer-create "*mdmua-folders*")))
+        (do-show (called-interactively-p 'interactive)))
+    ;; Setup the buffer to be empty
+    (with-current-buffer folderbuf
+      (let ((inhibit-read-only t))
+        (erase-buffer))
+      (setq buffer-read-only 't))
+    (with-mdmua-command "lsfolders" folderbuf
+      ((equal signal "finished\n")
+       (let ((inhibit-read-only t))
+         (goto-char (point-min))
+         ;; Search for folders and mark them up with properties
+         (loop
+          while (re-search-forward "^\\([A-Za-z0-9_-]+\\)$" nil t)
+          do
+          (let ((folder-name (match-string 1)))
+            (put-text-property
+             (line-beginning-position)
+             (line-end-position)
+             'folder-name folder-name)))
+         ;; Reverse sort the folders
+         (sort-lines t (point-min) (point-max))
+         ;; Add the INBOX
+         (insert (propertize "INBOX" 'folder-name "INBOX") "\n")
+       (when do-show
+         (switch-to-buffer folderbuf)))))))
+
+(defun mdmua-open-folder (folder-name &optional folder-buffer)
+  "Open the specified FOLDER-NAME.
+
+Currently we expect the folder to be at point.
+
+Optionally look in the specified buffer."
+  (interactive
+   (list
+    (get-text-property (point) 'folder-name)
+    (current-buffer)))
+  (let ((folder-buf (or folder-buffer (current-buffer))))
+    (mdmua-list2
+     folder-name
+     (lambda (buffer)
+       (with-current-buffer folder-buffer
+         (save-excursion
+           (let ((inhibit-read-only t))
+             (goto-char (point-min))
+             (re-search-forward (concat "^" folder-name "$") nil t)
+             (insert "\n")
+             (insert-buffer-substring buffer))))))))
+
+(defun mdmua-close-folder (folder-name)
+  "Close the specified FOLDER-NAME."
+  (interactive
+   (list
+    (get-text-property (point) 'folder-name)))
+  (save-excursion
+    (forward-line)
+    (let* ((p (point))
+           (next-line-is-folder
+            (progn
+              (goto-char (line-beginning-position))
+              (looking-at "^[A-Za-z0-9_-]+$"))))
+      (when (not next-line-is-folder)
+        (let ((inhibit-read-only t))
+          (delete-region
+           p
+           (next-single-property-change p 'folder-name)))))))
+
 (defun mdmua ()
+  "MD based mail user agent."
   (interactive)
   (setq mdmua-buffer (get-buffer-create "mdmua"))
   (switch-to-buffer mdmua-buffer)
-  (make-local-variable 'mdmua-folders)
-  (setq buffer-read-only 't)
-  (setq mdmua-folders '("INBOX"))
+  (mdmua-folders mdmua-buffer)
   (when (not (local-variable-p 'mdmua-pulling))
     (make-local-variable 'mdmua-pulling)
     (setq mdmua-pulling "no"))
@@ -208,18 +330,27 @@ configured 'mdmua-maildir'."
       (define-key mdmua-mode-map "d" 'mdmua-trash-message)
       (define-key mdmua-mode-map "r" 'mdmua-on-list)
       (define-key mdmua-mode-map "R" 'mdmua-on-regex)
-      (define-key mdmua-mode-map "p" 'mdmua-pull))
-    )
-  (use-local-map mdmua-mode-map)
-  (mdmua-folder-list))
+      (define-key mdmua-mode-map "p" 'mdmua-pull)))
+  (use-local-map mdmua-mode-map))
 
 (defun mdmua-open ()
+  "Open (or close) the thing at point.
+
+Either a folder or a message.
+
+If we try to open an opened folder, we close it instead."
   (interactive)
   ;; Test to see if we're opening a folder or not
   (if (save-excursion
-        (goto-char (point-min))
+        ;;(goto-char (point-min))
+        (goto-char (line-beginning-position))
         (re-search-forward "^[^ ]" (line-end-position) 't))
-      (call-interactively 'mdmua-open-folder)
+      (if (save-excursion
+            (forward-line)
+            (goto-char (line-beginning-position))
+            (looking-at "^[A-Za-z0-9_-]+"))
+          (call-interactively 'mdmua-open-folder)
+        (call-interactively 'mdmua-close-folder))
     (call-interactively 'mdmua-open-message)))
 
 ;; Mandling key'd messages
@@ -237,7 +368,7 @@ means."
     (clipboard-kill-ring-save (point-min) (point-max))))
 
 (defun mdmua-message-list-get (folder-buffer folder-name key)
-  "Retrieve the message object specified by folder-name and key."
+  "Retrieve the message object specified by FOLDER-NAME and KEY."
   (let ((msglist
          (plist-get
           (cdr (assoc folder-name (with-current-buffer folder-buffer
@@ -259,35 +390,34 @@ means."
   (interactive)
   (if (with-current-buffer "mdmua"
         (not (equal mdmua-pulling " mdmua:done")))
-      (progn
+      (let ((pull-buf (get-buffer-create "* mdmua-pull *")))
         (with-current-buffer "mdmua"
           (setq mdmua-pulling "running")
           (setq mdmua-pull-display-string " mdmua:running")
           )
-        (with-mdmua-shell-command "mdpullall" (get-buffer-create "* mdmua-pull *")
+        (with-mdmua-shell-command "mdpullall" pull-buf
           ((equal signal "finished\n")
            ;; We can now refresh the data
            (with-current-buffer "mdmua"
              (setq mdmua-pulling "done")
              (setq mdmua-pull-display-string " mdmua:done")
              )
-           (kill-buffer (process-buffer process))
-           ))
-        )
-    )
-  )
+           (kill-buffer (process-buffer process)))))))
 
 
 (defvar mdmua-pull-display-string " mdmua:done"
-  ;; TODO
-  ;; WHY does this need a space when it is added to the global-mode-string list???
+  ;; FIXME Why does this need a space when it is added to the
+  ;; global-mode-string list???
   "The string to show whether the mdmua is being pulled or not")
 
 (defun mdmua-pull-display ()
   "Set the mode line to display when we are pulling"
   (interactive)
-  (setq global-mode-string (append global-mode-string (list 'mdmua-pull-display-string)))
-  )
+  (setq global-mode-string
+        (append
+         global-mode-string
+         (list 'mdmua-pull-display-string))))
+
 
 ;; Message funcs
 (require 'qp)
@@ -314,8 +444,7 @@ Also causes the buffer to be marked not modified."
   (interactive)
   (let ((buffer-read-only nil))
     (fill-paragraph)
-    (set-buffer-modified-p nil)
-    ))
+    (set-buffer-modified-p nil)))
 
 (define-derived-mode mdmua-message-mode
   message-mode  ;; parent
@@ -371,7 +500,7 @@ useful while we're developing mdmua."
                               (json-read))))
               (kill-buffer structbuf)
               (with-current-buffer msgbuf
-                (make-variable-buffer-local 'mdmua-message--struct)
+                (make-local-variable 'mdmua-message--struct)
                 (setq mdmua-message--struct partlist))
               (switch-to-buffer msgbuf)
               (goto-char (point-min))))))
@@ -397,6 +526,9 @@ useful while we're developing mdmua."
       ('t
        (message "mdmua open message got signal %s" signal)
        (display-buffer (process-buffer process))))))
+
+(defvar mdmua-mailcaps-read nil
+  "Signal whether the mailcaps have been read.")
 
 (defun mdmua-message-open-part (message-key part-number)
   "Open the specified PART-NUMBER from the specified MESSAGE-KEY.
@@ -435,6 +567,9 @@ Then people can provide specific support for 'mdmua'."
                            (cons (format "%s {%d}" (elt l n) n) n))))
           (msg-key (buffer-name))
           (completion (completing-read  "Which part: " collection)))
+     (unless mdmua-mailcaps-read
+       (mailcap-parse-mailcaps)
+       (setq mdmua-mailcaps-read t))
      (if (not (assoc completion collection))
          (list msg-key completion)
        (save-match-data
@@ -459,7 +594,10 @@ Then people can provide specific support for 'mdmua'."
         partbuf
         ;; sentinel commands
         ((equal signal "finished\n")
-         (message "mdmua - finished viewing part %s of %s" part-number message-key))))))
+         (message
+          "mdmua - finished viewing part %s of %s"
+          part-number
+          message-key))))))
 
 
 ;; Folder funcs
@@ -476,65 +614,6 @@ Then people can provide specific support for 'mdmua'."
          (point-at-eol)
          `(marked t
                   face (foreground-color . "green")))))))
-
-
-(defun mdmua--sentinel-trash (proc signal)
-  (cond
-   ((equal signal "finished\n")
-    ;; Get the message from the folder buffer's message store
-    (let ((message
-           (with-current-buffer (process-buffer proc)
-             (mdmua-message-list-get folder-buffer
-                                     folder-name
-                                     message-key))))
-      ;; Now change the message stored there
-      (plist-put message :flags (concat "T" (plist-get message :flags)))
-      ;; And now update the text
-      (mdmua--render (mdmua-folders-list mdmua-folders))
-      (let ((pos (text-property-any
-                  (point-min)
-                  (point-max)
-                  'key
-                  (plist-get message :key))))
-        (goto-char pos)
-        (next-line))
-      )
-    (kill-buffer (process-buffer proc)))))
-
-(defun mdmua-trash-marked ()
-  (interactive)
-  (save-excursion
-    (goto-char (point-min))
-    (let ((pos (next-single-property-change (point) 'marked))
-          (marked '()))
-      (while pos
-        (setq marked
-              (append
-               marked
-               (list
-                (cons
-                 (plist-get (text-properties-at pos) 'folder)
-                 (plist-get (text-properties-at pos) 'key)))))
-        (setq pos (next-single-property-change pos 'marked)))
-      ;; need to transform (folder-name . message-key) into message-key
-      (let ((keys
-             (mapconcat
-              (lambda (x)(cdr x)) marked " ")))
-        (let ((buf (current-buffer))
-              (proc
-               (start-process-shell-command
-                ;; TODO:::
-                ;; rewrite md so it can take message lists on stdin
-                ;; then send trashed messages on stdin
-                "mdmua"
-                "mdmua-channel"
-                (concat mdmua-md-bin-path "trash" message))))
-          (set-process-sentinel proc 'mdmua--sentinel-trash)
-          (with-current-buffer (process-buffer proc)
-            (make-local-variable 'trash-info)
-            (seq trash-info `(:folder-buffer ,buf
-                                             :message-key ,message
-                                             :folder-name ,folder))))))))
 
 (defun mdmua-trash-message (message buffer)
   "Delete the specified MESSAGE in the specified BUFFER.
@@ -564,96 +643,6 @@ When called interactively, the message on the current line."
 
 
 ;; Message lists
-
-(defun mdmua--message-render (message)
-  "Render MESSAGE in a folder list.
-
-Called repeatedly by 'mdmua--render' for all messages in open
-folders."
-  (propertize
-   (format "% 22s  %30s  %s\n"
-           (or (plist-get message :date)
-               "0-00-00")
-           (or (elt (plist-get message :from) 0)
-               (elt (plist-get message :from) 1)
-               "nobody@nowhere")
-           (or (plist-get message :subject)
-               " "))
-   'key (plist-get message :key)
-   'folder (plist-get message :folder)
-   ;; This should be done with syntax instead of directly
-   'face (cond
-          ((member ?T (string-to-list (plist-get message :flags)))
-           '(foreground-color . "Red"))
-          ((member ?S (string-to-list (plist-get message :flags)))
-           '(foreground-color . "Black"))
-          ('t
-           '(foreground-color . "Blue")))))
-
-(defun mdmua--render (folders)
-  "Render the state of the folders.
-This takes the state of mdmua from the list of folders and causes
-it to be rendered to the buffer
-
-The list of folders maintained by mdmua is called:
-
-  mdmua-folders
-
-and is buffer local for every mdmua buffer.
-
-This list is the model of the mailstore. If we can make multiple
-mdmua-foders we can have multiple mailstores.
-
-The structure is:
-
-  association-list of:
-    folder-names -> property lists
-      each property-list
-       :messages -> property list of message
-         each message
-           :subject
-           :date
-           :key
-           :flags
-
-So to retrieve the 3rd message from the INBOX:
-
- (elt (plist-get
-          (cdr (assoc \"INBOX\" mdmua-folders))
-          :messages)
-      3)
-
-Obviously with this structure it isn't easy to find a particular
-key."
-  ;; This is quite a naive folder render
-  ;; ... it takes no account of existing display
-  (condition-case nil
-      (let ((inhibit-read-only 't))
-        (save-excursion
-          (delete-region (point-min) (point-max))
-          (setq
-           mdmua-folders
-           (mapcar
-            (lambda (folder-name)
-              ;; Render a folder
-              (insert (propertize
-                       (concat folder-name "\n")
-                       'folder-name folder-name))
-              ;; Rebuild the assoc item for the folder
-              (let ((folder-obj (assoc folder-name mdmua-folders)))
-                (if (not (plist-get (cdr folder-obj) :open))
-                    `(,folder-name . (:open nil :messages '()))
-                  (mapc
-                   (lambda (msg)
-                     (if (plist-get msg :key)
-                         (insert (mdmua--message-render msg))))
-                   (plist-get (cdr folder-obj) :messages))
-                  `(,folder-name
-                    . (:open 't
-                             :messages
-                             ,(plist-get (cdr folder-obj) :messages))))))
-            folders))))
-    (error nil)))
 
 (defvar mdmua-on-list-history '()
   "The history for the command with list and regex commands.")
@@ -706,7 +695,9 @@ there is not active region."
    md-command
    (with-current-buffer md-buffer
      (save-excursion
-       (goto-char (region-beginning))
+       (if (use-region-p)
+           (goto-char (region-beginning))
+         (goto-char (point-min)))
        (or
         (loop
          while
@@ -722,71 +713,5 @@ there is not active region."
            (forward-line 1)
            key))
         (error "mdmua: no messages match '%s'" regex))))))
-
-(defun mdmua-folders-list (folder-struct)
-  "Return just the folders from the folder struct"
-  (mapcar (lambda (v) (car v)) folder-struct))
-
-(defun mdmua-folder-list ()
-  "List the messages in a folder."
-  (interactive)
-  (let ((folderbuf (get-buffer-create "* mdmua-folders *")))
-    (with-mdmua-command "lsfolders" folderbuf
-      ((equal signal "finished\n")
-       ;; we need to read the lines in the buffer and put them into the
-       ;; user's display buffer's folder list
-       ;; ... and then repaint
-       (let ((folders (mdmua-util--buffer-lines)))
-         (setq folders (cons "INBOX" folders))
-         (with-current-buffer "mdmua"
-           (mdmua--render folders)
-           (kill-buffer folderbuf)))
-       )
-      ('t
-       (message "mdmua: something went wrong listing folders?")))))
-
-(defun mdmua-close-folder (folder-name)
-  (interactive (list (get-text-property (point) 'folder-name)))
-  (let ((folder-obj (assoc folder-name mdmua-folders)))
-    (plist-put (cdr folder-obj) :open nil)
-    (mdmua--render (mapcar (lambda (x) (car x)) mdmua-folders))))
-
-(defun mdmua-open-folder (folder-name)
-  "Open the folder FOLDER-NAME.
-
-When called interactively this expects to be located on a line
-with the folder on it."
-  (interactive (list (get-text-property (point) 'folder-name)))
-  (let ((folder-obj (assoc folder-name mdmua-folders)))
-    (if (plist-get (cdr folder-obj) :open)
-        (call-interactively 'mdmua-close-folder)
-      (mdmua-list folder-name))))
-
-(defun mdmua-list (folder)
-  "List the messages in a folder."
-  (interactive)
-  (let* ((folderref (if (equal folder "INBOX") "" folder))
-         (lstcommand (format "lisp -r %s" folderref))
-         (lstbuf (get-buffer-create (format "* mdmua-list-%s *" folder))))
-    (with-mdmua-command lstcommand lstbuf
-      ((equal signal "finished\n")
-       ;; We need to read the lines in the buffer and put them into the
-       ;; user's display buffer's in a sort of repaint
-       (let ((msg-lines (mdmua-util--buffer-lines)))
-         (with-current-buffer "mdmua"
-           (let* ((folder-list (copy-sequence mdmua-folders))
-                  (folder-obj (assoc folder folder-list)))
-             ;; Change the folders message list and set the open flag to true
-             (plist-put (cdr folder-obj)
-                        :messages
-                        (mapcar (lambda (line)
-                                  (condition-case nil
-                                      (let ((json (json-read-from-string line)))
-                                        (mdmua--alist-to-plist json))
-                                    (error nil)))
-                                msg-lines))
-             (plist-put (cdr folder-obj) :open 't)
-             (mdmua--render (mdmua-folders-list folder-list)))
-           (kill-buffer lstbuf)))))))
 
 ;;; end of mdmua.el
