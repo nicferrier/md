@@ -1,0 +1,7 @@
+.venv*
+build/*
+*~
+*.pyc
+dist/*
+testmd*
+*.bak
