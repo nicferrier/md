@@ -37,8 +37,8 @@ except ImportError:
     import simplejson as json
 
 import logging
-from api import MdFolder
-from api import SEPERATOR
+from md.api import MdFolder
+from md.api import SEPERATOR
 
 logger = logging.getLogger("mdlib")
 logging.basicConfig()
@@ -87,7 +87,7 @@ class MdClient(object):
             except:
                 return -1
 
-        lst = folder.items() if not since else folder.items_since(since)
+        lst = list(folder.items()) if not since else folder.items_since(since)
         sorted_lst = sorted(lst, key=sortcmp, reverse=1 if reverse else 0)
         itemlist = [(folder, key, msg) for key,msg in sorted_lst]
         return itemlist
@@ -116,15 +116,15 @@ class MdClient(object):
                 output_string = "% -20s % 20s % 50s  [%s]  %s" % output_items
                 if not grep or (grep and grep in output_string):
                     if field:
-                        print >>stream, output_items[int(field)]
+                        print(output_items[int(field)], file=stream)
                     else:
-                        print >>stream, output_string
-            except IOError,e:
+                        print(output_string, file=stream)
+            except IOError as e:
                 if e.errno == errno.EPIPE:
                     # Broken pipe we can ignore
                     return
                 self.logger.exception("whoops!")
-            except Exception,e:
+            except Exception as e:
                 self.logger.exception("whoops!")
 
     def lisp(self, foldername="INBOX", reverse=False, since=None, stream=sys.stdout):
@@ -139,26 +139,26 @@ class MdClient(object):
 
         for folder, mk, m in self._list(foldername, reverse, since):
             try:
-                print >>stream, json.dumps({
+                print(json.dumps({
                         'folder': folder.folder or foldername or "INBOX",
                         'key': "%s%s%s" % (folder.folder or foldername or "INBOX", SEPERATOR, mk),
                         'date':  str(m.date),
                         "flags": m.get_flags(),
                         'from': fromval(m.get_from()),
                         'subject': re.sub("\n|\'|\"", _escape, m.get_subject() or "")
-                        })
-            except IOError,e:
+                        }), file=stream)
+            except IOError as e:
                 if e.errno == errno.EPIPE:
                     # Broken pipe we can ignore
                     return
                 self.logger.exception("whoops!")
-            except Exception,e:
+            except Exception as e:
                 self.logger.exception("whoops!")
 
     def lsfolders(self, stream=sys.stdout):
         """List the subfolders"""
         for f in self.folder.folders():
-            print >>stream, f.folder.strip(".")
+            print(f.folder.strip("."), file=stream)
 
     def remove(self, msgid):
         foldername, msgkey = msgid.split(SEPERATOR)
@@ -178,7 +178,7 @@ class MdClient(object):
         # Now look up the message
         msg = folder[msgkey]
         msg.is_seen = True
-        hdr = msg.items()
+        hdr = list(msg.items())
         for p in msg.walk():
             yield hdr,p
         return
@@ -199,9 +199,9 @@ class MdClient(object):
                     if name.lower() == "content-type":
                         val = part["content-type"]
                     val = " ".join([l.strip() for l in val.split("\n")])
-                    print >>stream, "%s: %s" % (name,val)
-                print >>stream, splitter
-                print >>stream, part.get_payload(decode=True)
+                    print("%s: %s" % (name,val), file=stream)
+                print(splitter, file=stream)
+                print(part.get_payload(decode=True), file=stream)
                 break
 
     def getrawpart(self, msgid, stream=sys.stdout):
@@ -210,7 +210,7 @@ class MdClient(object):
         for hdr, part in self._get(msgid):
             pl = part.get_payload(decode=True)
             if pl != None:
-                print >>stream, pl
+                print(pl, file=stream)
                 break
 
     def getrawpartid(self, msgid, partid, stream=sys.stdout):
@@ -220,7 +220,7 @@ class MdClient(object):
         part = parts[int(partid)]
         pl = part.get_payload(decode=True)
         if pl != None:
-            print >>stream, pl
+            print(pl, file=stream)
 
 
     def getraw(self, msgid, stream=sys.stdout):
@@ -229,7 +229,7 @@ class MdClient(object):
         foldername, msgkey = msgid.split(SEPERATOR)
         folder = self.folder if foldername == "INBOX" else self._getfolder(foldername)
         msg = folder[msgkey]
-        print msg.content
+        print(msg.content)
 
     def getstruct(self, msgid, as_json=False, stream=sys.stdout):
         """Get and print the whole message.
@@ -238,10 +238,10 @@ class MdClient(object):
         """
         parts = [part.get_content_type() for hdr, part in self._get(msgid)]
         if as_json:
-            print >>stream, json.dumps(parts)
+            print(json.dumps(parts), file=stream)
         else:
             for c in parts:
-                print >>stream, c
+                print(c, file=stream)
 
     def get(self, msgid, stream=sys.stdout):
         foldername, msgkey = msgid.split(SEPERATOR)
@@ -249,6 +249,6 @@ class MdClient(object):
         # Now look up the message
         msg = folder[msgkey]
         msg.is_seen = True
-        print >>stream, msg.as_string()
+        print(msg.as_string(), file=stream)
 
 # End

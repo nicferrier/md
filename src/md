@@ -34,7 +34,25 @@ HOMEMAILDIR = "~/Maildir"
 MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
 
 # Depends on cmdlin
-import cmdln
+import cmd
+
+
+class SysArgsCmd(cmd.Cmd):
+    """Let's you use cmd with arg lists"""
+
+    def onecmd(self, args):
+        """Make a onecmd that operates on an array"""
+        cmdarg = args[0]
+        try:
+            func = getattr(self, 'do_' + cmdarg)
+        except AttributeError:
+            return self.default(args[1:])
+        else:
+            return func(args[1:])
+
+    def do_help(self, arg):
+        """A version of help that deals with the array args"""
+        return Cmd.do_help(self, " ".join(arg))
 
 
 class MdCLI(cmdln.Cmdln):

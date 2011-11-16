@@ -58,11 +58,11 @@ class Rule(object):
                         if folder:
                             pass
                         return self
-                except Exception,e:
-                    print "whoops! %s %s %s" % (self.pattern, field, self.command)
-                    print e
+                except Exception as e:
+                    print("whoops! %s %s %s" % (self.pattern, field, self.command))
+                    print(e)
             else:
-                print "message had no %s" % self.field
+                print("message had no %s" % self.field)
 
     def __str__(self):
         return "%s = {%s} then %s" % (
@@ -84,6 +84,6 @@ def parse(fd):
     return ruleslist
 
 if __name__ == "__main__":
-    print "nothing yet"
+    print("nothing yet")
     
 # End

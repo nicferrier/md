@@ -3,7 +3,7 @@ from mdlib import MdFolder
 from mdlib import MdClient
 from mdlib.api import MDMSG_FILENAME_PATTERN
 from mdlib.api import SEPERATOR
-from StringIO import StringIO
+from io import StringIO
 
 TESTMSG = """Return-Path: <%s>
 X-Original-To: nic@ferrier.me.uk
@@ -76,7 +76,7 @@ class TestMaildir(unittest.TestCase):
 
 
      def test_keys(self):
-          keys =  self.folder.keys()
+          keys =  list(self.folder.keys())
           self.assertEquals(
                keys,
                ['1270028940.V801Ie8c95dM583793']
@@ -108,7 +108,7 @@ class TestMaildir(unittest.TestCase):
                assert False, "%s should not be in this folder" % msg_key
 
      def test_items(self):
-          lst = self.folder.items()
+          lst = list(self.folder.items())
           self.assertEquals(
                [(name,msg.content.split("\n")[0]) for name,msg in lst],
                [('1270028940.V801Ie8c95dM583793', 'Return-Path: <someone@example1.com>')]
@@ -116,12 +116,12 @@ class TestMaildir(unittest.TestCase):
 
      def test_values(self):
           self.assertEquals(
-               self.folder.values()[0].date.day,
+               list(self.folder.values())[0].date.day,
                3
                )
 
           self.assertEquals(
-               self.folder.values()[0].get_from(),
+               list(self.folder.values())[0].get_from(),
                'richard@example.com'
                )
 
@@ -147,7 +147,7 @@ class TestMaildir(unittest.TestCase):
 
      def test_remove(self):
           del self.folder["1270028940.V801Ie8c95dM583793"]
-          self.assertEquals(self.folder.keys(), [])
+          self.assertEquals(list(self.folder.keys()), [])
 
      def test_folders(self):
          self.assertEquals(
@@ -274,7 +274,7 @@ class TestClient(unittest.TestCase):
                )
 
 
-import filterprocessor
+from . import filterprocessor
 class TestFilter(unittest.TestCase):
      """Test that our simple filtering all works."""
      def setUp(self):

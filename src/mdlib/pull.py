@@ -48,7 +48,7 @@ class _SSHStore(object):
         """
         command = cmd.format(maildir=self.directory)
         if verbose:
-            print command
+            print(command)
         p = Popen([
                 "ssh",
                 "-T",
@@ -78,7 +78,7 @@ class _Store(object):
         """
         command = cmd.format(maildir=self.directory)
         if verbose:
-            print command
+            print(command)
         p = Popen(["bash", "-c", command], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout,stderr = p.communicate()
         return stdout
@@ -134,12 +134,12 @@ def filepull(maildir, localmaildir, noop=False, verbose=False, filterfile=None):
     store = _Store(maildir)
     _pull(store, localmaildir, noop, verbose, filterfile)
 
-from filterprocessor import parse as parse_filter
-from StringIO import StringIO
-from hdrparser import HeaderOnlyParser
+from .filterprocessor import parse as parse_filter
+from io import StringIO
+from .hdrparser import HeaderOnlyParser
 from os.path import basename
 from os.path import dirname
-from api import MdFolder
+from .api import MdFolder
 
 def _filter(msgdata, mailparser, mdfolder, mailfilters):
     """Filter msgdata by mailfilters"""
@@ -174,18 +174,18 @@ def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
     for basefile, timestamp, container in _list_remote(store, localmaildir, verbose=verbose):
         if basefile in localfiles:
             if verbose:
-                print "found %s" % basefile
+                print("found %s" % basefile)
         else:
             storefile = joinpath(localstore, basefile)
             if existspath(storefile):
                 if verbose:
-                    print "exists %s %s" % (basefile, storefile)
+                    print("exists %s %s" % (basefile, storefile))
             else:
-                print "pulling %s %s to %s" % (basefile, container, storefile)
+                print("pulling %s %s to %s" % (basefile, container, storefile))
                 stdout = store.cmd("cat %s/%s*" % (container, basefile), verbose=verbose)
 
                 if verbose and len(stdout) < 1:
-                    print "%s is an error" % storefile
+                    print("%s is an error" % storefile)
 
                 if not noop and len(stdout) > 0:
                     with open(storefile, "w") as fd:
@@ -198,12 +198,12 @@ def _pull(store, localmaildir, noop=False, verbose=False, filterfile=None):
                             basefile
                             )
                         symlink(abspath(storefile), target)
-                    except OSError, e:
+                    except OSError as e:
                         if e.errno == 17:
                             # file exists
                             pass
                         else:
-                            print "%s %s %s" % (e, storefile, target)
+                            print("%s %s %s" % (e, storefile, target))
                             
                     # If we have filters then we should pass the message object to them
                     list(_filter(stdout, mailparser, mailfilters, mdfolder))

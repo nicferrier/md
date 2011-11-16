@@ -21,11 +21,11 @@ from email.utils import parsedate
 from email.utils import mktime_tz
 
 from datetime import datetime
-from StringIO import StringIO
+from io import StringIO
 
 import time
 
-from hdrparser import HeaderOnlyParser
+from .hdrparser import HeaderOnlyParser
 _hdr_parser = HeaderOnlyParser()
 
 from pyproxyfs import Filesystem
@@ -70,10 +70,10 @@ class MdMessage(object):
             d = parsedate_tz(self.msgobj["Date"])
             t = mktime_tz(d)
             self.time = t
-        except Exception, e:
+        except Exception as e:
             try:
                 self.time = time.mktime(parsedate(self.msgobj["Date"]))
-            except Exception, e:
+            except Exception as e:
                 self.time = -1
 
     def _get_content(self):
@@ -128,7 +128,7 @@ class MdMessage(object):
 
     def items(self):
         """Present the email headers"""
-        return list(self.iteritems())
+        return list(self.items())
 
     def _flags(self):
         m = self.msgpathre.match(self.filename)
@@ -256,7 +256,7 @@ class _KeysCache(object):
         return
 
     def items(self):
-        return list(self.iteritems())
+        return list(self.items())
 
     def items_since(self, since=None):
         return list(self.iteritems_since(since=since))
@@ -318,7 +318,7 @@ class MdFolder(object):
 
         class FolderList(object):
             def __iter__(self):
-                dirs = just_dirs.keys()
+                dirs = list(just_dirs.keys())
                 dirs.sort()
                 dirs.reverse()
                 for dn in dirs:
@@ -415,7 +415,7 @@ class MdFolder(object):
 
     def _curlist(self):
         """The list of messages in 'cur'. Memoized"""
-        return self._fileslist()[0].keys()
+        return list(self._fileslist()[0].keys())
 
     def _curiter(self):
         """Just the iter of _curlist"""
@@ -439,7 +439,7 @@ class MdFolder(object):
             filestore, keycache = self._fileslist()
             msgobj = keycache[key]
             return msgobj
-        except KeyError, e:
+        except KeyError as e:
             e.message = "no such message %s" % key
             raise
 
@@ -457,18 +457,18 @@ class MdFolder(object):
         return self.__iter__()
 
     def iteritems(self):
-        for k in self.iterkeys():
+        for k in self.keys():
             yield k, self[k]
 
     def keys(self):
-        return list(self.iterkeys())
+        return list(self.keys())
 
     def values(self):
-        return list([self[k] for k in self.iterkeys()])
+        return list([self[k] for k in self.keys()])
 
     def items(self):
         filestore, keystore = self._fileslist()
-        return keystore.items()
+        return list(keystore.items())
 
     def items_since(self, since=None):
         filestore, keystore = self._fileslist()
