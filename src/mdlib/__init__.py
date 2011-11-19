@@ -50,6 +50,15 @@ def _escape(match_obj):
         return "\\\""
     return
 
+def _get_charset(content_type):
+    """The feed parser we're using seems to not set charsets correctly.
+
+    This is a little method to parse a content type and return the charset.
+    """
+    m = re.match("""[^;]+(; charset="*([A-Za-z0-9-]+)"*$)""", content_type)
+    if m:
+        return m.group(2)
+
 class MdClient(object):
     def __init__(self, maildir, filesystem=None):
         self.logger = logging.getLogger("MdClient.%s" % maildir)
@@ -215,7 +224,11 @@ class MdClient(object):
                     print("%s: %s" % (name,val), file=stream)
                 print(splitter, file=stream)
                 payload = part.get_payload(decode=True)
-                print(payload.decode("ascii"), file=stream)
+                # There seems to be a problem with the parser not doing charsets for parts
+                chartype = part.get_charset() \
+                    or _get_charset(part.get("Content-Type", "")) \
+                    or "us-ascii"
+                print(payload.decode(chartype), file=stream)
                 break
 
     def getrawpart(self, msgid, stream=sys.stdout):

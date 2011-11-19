@@ -313,7 +313,7 @@ class TestCli(unittest.TestCase):
      def test_ls(self):
           """Test we can list a folder correctly."""
           cli.main(
-               ["md", "-M", "/var/maildir/testmaildir", "ls"], 
+               ["md", "-M", "/var/maildir/testmaildir", "ls"],
                **self.extras
                )
           output = self.extras["stdout"].getvalue()

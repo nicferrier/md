@@ -36,7 +36,6 @@ MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
 
 # Depends on cmdlin
 from mdlib.cmdln import Cmdln
-from mdlib.cmdln import LOOP_ALWAYS
 from mdlib.cmdln import option
 
 
@@ -169,6 +168,10 @@ class MdCLI(Cmdln):
         client.gettext(message, self.stdout)
 
     def do_raw(self, subcmd, opts, message):
+        """${cmd_name}: dump the complete raw message
+
+        ${cmd_usage}
+        """
         client = MdClient(self.maildir)
         client.getraw(message, self.stdout)
 
@@ -214,8 +217,7 @@ class MdCLI(Cmdln):
         environment variable.
         """
         # TODO fix this because it's broken right now
-        shell = MdCLI()
-        mdcli.main(argv=[], loop=LOOP_ALWAYS)
+        shellmain()
 
     @option("-N", "--noop", help="do not pull", action="store_true")
     @option("-f", "--filter", help="filter filename", action="store")
@@ -328,6 +330,19 @@ class MdCLI(Cmdln):
                     file=self.stdout
                     )
 
+from mdlib.cmdln import LOOP_ALWAYS
+from mdlib.cmdln import LOOP_NEVER
+
+class ShellCLI(MdCLI):
+    def do_session(self, subcmd, opts):
+        """this command is for internal reasons only."""
+        pass
+
+def shellmain():
+    """Do a main just for a shell session."""
+    shell = ShellCLI()
+    return shell.main(argv=["md", "session"], loop=LOOP_ALWAYS)
+
 def main(*argv, 
           filesystem=None, 
           do_exit=True,
@@ -341,7 +356,7 @@ def main(*argv,
         mdcli.filesystem = filesystem
         mdcli.stdout = stdout or sys.stdout
         mdcli.stderr = stderr or sys.stderr
-        retval = mdcli.main(*argv)
+        retval = mdcli.main(*argv, loop=LOOP_NEVER)
         if do_exit:
             sys.exit(retval)
         else:

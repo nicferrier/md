@@ -16,16 +16,18 @@ from os.path import basename
 from os.path import join as joinpath
 
 from email.parser import Parser
+from email.parser import BytesParser
 from email.utils import parsedate_tz
 from email.utils import parsedate
 from email.utils import mktime_tz
 
 from datetime import datetime
 from io import StringIO
+from io import BytesIO
 
 import time
 
-from .hdrparser import HeaderOnlyParser
+from mdlib.hdrparser import HeaderOnlyParser
 _hdr_parser = HeaderOnlyParser()
 
 from pyproxyfs import Filesystem
@@ -78,7 +80,11 @@ class MdMessage(object):
 
     def _get_content(self):
         # self.content is provided by __getattr__ through the cache var self._content
-        return Parser().parse(StringIO(self.content))
+        p = BytesParser()
+        content = self.content
+        content_io = BytesIO(content)
+        parsed_msg = p.parse(content_io)
+        return parsed_msg
 
     def walk(self):
         if self.headers_only:
@@ -107,7 +113,7 @@ class MdMessage(object):
         """Implements the get methods for SMTP headers on the embedded message."""
         if attrname == "content":
             if not self._content:
-                with self.filesystem.open(self.filename) as msgfd:
+                with self.filesystem.open(self.filename, "r+b") as msgfd:
                     self._content = msgfd.read()
             return self._content
 

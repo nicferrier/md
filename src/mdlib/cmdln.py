@@ -267,7 +267,6 @@ class RawCmdln(cmd.Cmd):
             argv = sys.argv
         else:
             argv = argv[:] # don't modify caller's list
-
         try:
             self.optparser = self.get_optparser()
             if self.optparser: # i.e. optparser=None means don't process for opts
@@ -296,6 +295,7 @@ class RawCmdln(cmd.Cmd):
         if loop == LOOP_ALWAYS:
             if args:
                 self.cmdqueue.append(args)
+
             return self.cmdloop()
         elif loop == LOOP_NEVER:
             if args:
@@ -376,7 +376,7 @@ class RawCmdln(cmd.Cmd):
                 else:
                     if self.use_rawinput:
                         try:
-                            line = raw_input(self._prompt_str)
+                            line = input(self._prompt_str)
                         except EOFError:
                             line = 'EOF'
                         except KeyboardInterrupt:
