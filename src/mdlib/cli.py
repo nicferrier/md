@@ -16,6 +16,21 @@
 
 """
 md - A maildir command line user agent.
+
+Copyright (C) 2010  Nic Ferrier <nic@ferrier.me.uk>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 __author__ = "Nic Ferrier <nic@ferrier.me.uk>"
@@ -67,7 +82,7 @@ class MdCLI(Cmdln):
         return getattr(self.options, "maildir", MAILDIR) or MAILDIR
 
     def do_lsfolders(self, subcmd, opts):
-        """${cmd_name}: list the sub folders of the maildir
+        """${cmd_name}: list the sub folders of the maildir.
 
         ${cmd_usage}
         """
@@ -208,6 +223,13 @@ class MdCLI(Cmdln):
         client = MdClient(self.maildir, filesystem=self.filesystem)
         client.get(message, self.stdout)
 
+    def do_quit(self, subcmd, opts):
+        """${cmd_name}: quit the shell.
+
+        ${cmd_usage}
+        """
+        self.stop = True
+
     def do_shell(self, subcmd, opts):
         """${cmd_name}: run a shell for md.
 
@@ -216,8 +238,7 @@ class MdCLI(Cmdln):
         The MAILDIR cannot be set with this command except through the
         environment variable.
         """
-        # TODO fix this because it's broken right now
-        self.cmdloop(intro="md: the maildir mail user agent")
+        self.cmdloop(intro=__doc__ + "\nType 'help' for help, 'quit' to quit.\n")
 
     @option("-N", "--noop", help="do not pull", action="store_true")
     @option("-f", "--filter", help="filter filename", action="store")
@@ -329,6 +350,13 @@ class MdCLI(Cmdln):
                     "%s found in store but not folders" % joinpath("store", storefile), 
                     file=self.stdout
                     )
+
+class ShellCLI(MdCLI):
+    def do_quit(self, subcmd, opts):
+        """${cmd_name}: quit the shell.
+        """
+        self.stop = True
+
 
 from mdlib.cmdln import LOOP_ALWAYS
 from mdlib.cmdln import LOOP_NEVER
