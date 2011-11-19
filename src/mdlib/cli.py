@@ -217,7 +217,7 @@ class MdCLI(Cmdln):
         environment variable.
         """
         # TODO fix this because it's broken right now
-        shellmain()
+        self.cmdloop(intro="md: the maildir mail user agent")
 
     @option("-N", "--noop", help="do not pull", action="store_true")
     @option("-f", "--filter", help="filter filename", action="store")
@@ -332,16 +332,6 @@ class MdCLI(Cmdln):
 
 from mdlib.cmdln import LOOP_ALWAYS
 from mdlib.cmdln import LOOP_NEVER
-
-class ShellCLI(MdCLI):
-    def do_session(self, subcmd, opts):
-        """this command is for internal reasons only."""
-        pass
-
-def shellmain():
-    """Do a main just for a shell session."""
-    shell = ShellCLI()
-    return shell.main(argv=["md", "session"], loop=LOOP_ALWAYS)
 
 def main(*argv, 
           filesystem=None, 
