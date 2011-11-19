@@ -37,8 +37,8 @@ except ImportError:
     import simplejson as json
 
 import logging
-from md.api import MdFolder
-from md.api import SEPERATOR
+from mdlib.api import MdFolder
+from mdlib.api import SEPERATOR
 
 logger = logging.getLogger("mdlib")
 logging.basicConfig()
@@ -53,8 +53,13 @@ def _escape(match_obj):
 class MdClient(object):
     def __init__(self, maildir, filesystem=None):
         self.logger = logging.getLogger("MdClient.%s" % maildir)
-        foldername = maildir.split("/")[-1]
-        base = splitpath(maildir)[0]
+        # Why would we do this? it requires that maildir's have to end
+        # in a slash. Bad idea? What benefit does it bring??
+        ## foldername = maildir.split("/")[-1]
+        ## base = splitpath(maildir)[0]
+        # Instead of doing that, let's do this:
+        foldername = ""
+        base = maildir
         self.folder = MdFolder(
             foldername if foldername else "",
             base=base,
@@ -76,6 +81,8 @@ class MdClient(object):
         """Do structured list output.
 
         Sorts the list by date, possibly reversed, filtered from 'since'.
+
+        The returned list is: foldername, message key, message object
         """
         folder = self.folder \
             if foldername == "INBOX" \
@@ -87,13 +94,15 @@ class MdClient(object):
             except:
                 return -1
 
-        lst = list(folder.items()) if not since else folder.items_since(since)
+        lst = folder.items() if not since else folder.items_since(since)
         sorted_lst = sorted(lst, key=sortcmp, reverse=1 if reverse else 0)
         itemlist = [(folder, key, msg) for key,msg in sorted_lst]
         return itemlist
 
     def ls(self, foldername="INBOX", reverse=False, since=None, grep=None, field=None, stream=sys.stdout):
         """Do standard text list of the folder to the stream.
+
+        'foldername' is the folder to list.. INBOX by default.
 
         'since' allows the listing to be date filtered since that
         date. It should be a float, a time since epoch.
@@ -102,7 +111,11 @@ class MdClient(object):
 
         'field' allows only 1 field to be output
         """
-        for folder, mk, m in self._list(foldername, reverse, since):
+        if foldername == "":
+            foldername = "INBOX"
+
+        msg_list = self._list(foldername, reverse, since)
+        for folder, mk, m in msg_list:
             try:
                 # I am very unsure about this defaulting of foldername
                 output_items = (
@@ -201,7 +214,8 @@ class MdClient(object):
                     val = " ".join([l.strip() for l in val.split("\n")])
                     print("%s: %s" % (name,val), file=stream)
                 print(splitter, file=stream)
-                print(part.get_payload(decode=True), file=stream)
+                payload = part.get_payload(decode=True)
+                print(payload.decode("ascii"), file=stream)
                 break
 
     def getrawpart(self, msgid, stream=sys.stdout):

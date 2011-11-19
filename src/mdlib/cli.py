@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 # md - a simple maildir command line user agent
 # Copyright (C) 2010  Nic Ferrier <nic@ferrier.me.uk>
 
@@ -24,9 +22,12 @@ __author__ = "Nic Ferrier <nic@ferrier.me.uk>"
 __version__ = 0.1
 
 import os.path
+from os.path import join as joinpath
 import os
 import sys
-from mdlib import *
+import re
+
+from mdlib import MdClient
 
 ## This should be redefined as an option and a thread local
 ## Default value should come from an env var or be ~/Maildir
@@ -34,33 +35,20 @@ HOMEMAILDIR = "~/Maildir"
 MAILDIR = os.path.expanduser(os.environ.get("MAILDIR", HOMEMAILDIR))
 
 # Depends on cmdlin
-import cmd
+from mdlib.cmdln import Cmdln
+from mdlib.cmdln import LOOP_ALWAYS
+from mdlib.cmdln import option
 
 
-class SysArgsCmd(cmd.Cmd):
-    """Let's you use cmd with arg lists"""
-
-    def onecmd(self, args):
-        """Make a onecmd that operates on an array"""
-        cmdarg = args[0]
-        try:
-            func = getattr(self, 'do_' + cmdarg)
-        except AttributeError:
-            return self.default(args[1:])
-        else:
-            return func(args[1:])
-
-    def do_help(self, arg):
-        """A version of help that deals with the array args"""
-        return Cmd.do_help(self, " ".join(arg))
-
-
-class MdCLI(cmdln.Cmdln):
+class MdCLI(Cmdln):
     name = "md"
+    filesystem = None
+    stdout = sys.stdout
+    stderr = sys.stderr
 
     def get_optparser(self):
         """Override to allow specification of the maildir"""
-        p = cmdln.Cmdln.get_optparser(self)
+        p = Cmdln.get_optparser(self)
         p.add_option(
             "-M",
             "--maildir",
@@ -84,13 +72,13 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        client = MdClient(self.maildir)
-        client.lsfolders(stream=sys.stdout)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
+        client.lsfolders(stream=self.stdout)
 
-    @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
-    @cmdln.option("-f", "--field", help="specify the field")
-    @cmdln.option("-g", "--grep", help="pattern match on the output string")
-    @cmdln.option(
+    @option("-r", "--reverse", help="reverse the listing", action="store_true")
+    @option("-f", "--field", help="specify the field")
+    @option("-g", "--grep", help="pattern match on the output string")
+    @option(
         "-s", 
         "--since", 
         help="""only list the mails since this timestamp""", 
@@ -106,18 +94,18 @@ class MdCLI(cmdln.Cmdln):
 
           md ls -s $(date '+%s')
         """
-        client = MdClient(self.maildir)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
         client.ls(
             foldername = folder, 
-            stream = sys.stdout, 
+            stream = self.stdout, 
             reverse = getattr(opts, "reverse", False),
             grep = getattr(opts, "grep", None),
             field = getattr(opts, "field", None),
             since = float(getattr(opts, "since", -1))
             )
 
-    @cmdln.option("-r", "--reverse", help="reverse the listing", action="store_true")
-    @cmdln.option(
+    @option("-r", "--reverse", help="reverse the listing", action="store_true")
+    @option(
         "-s", 
         "--since", 
         help="""only list the mails since this timestamp""", 
@@ -129,10 +117,10 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        client = MdClient(self.maildir)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
         client.lisp(
             foldername=folder,
-            stream=sys.stdout, 
+            stream=self.stdout, 
             reverse=getattr(opts, "reverse", False),
             since=float(getattr(opts, "since", -1))
             )
@@ -158,7 +146,7 @@ class MdCLI(cmdln.Cmdln):
         ${cmd_usage}
         """
         maildir = self.maildir
-        client = MdClient(maildir)
+        client = MdClient(maildir, filesystem=self.filesystem)
         try:
             client.remove(message)
         except KeyError:
@@ -169,7 +157,7 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        client = MdClient(self.maildir)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
         client.move(message, folder)
 
     def do_text(self, subcmd, opts, message):
@@ -177,45 +165,45 @@ class MdCLI(cmdln.Cmdln):
 
         ${cmd_usage}
         """
-        client = MdClient(self.maildir)
-        client.gettext(message, sys.stdout)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
+        client.gettext(message, self.stdout)
 
     def do_raw(self, subcmd, opts, message):
         client = MdClient(self.maildir)
-        client.getraw(message, sys.stdout)
+        client.getraw(message, self.stdout)
 
-    @cmdln.option("-p", "--part", help="specify the part number")
+    @option("-p", "--part", help="specify the part number")
     def do_rawpart(self, subcmd, opts, message):
         """${cmd_name}: dump a part from the specified message
 
         ${cmd_usage}
         ${cmd_option_list}
         """
-        client = MdClient(self.maildir)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
         partid = getattr(opts, "part", None)
         if not partid:
-            client.getrawpart(message, sys.stdout)
+            client.getrawpart(message, self.stdout)
         else:
-            client.getrawpartid(message, partid, sys.stdout)
+            client.getrawpartid(message, partid, self.stdout)
 
-    @cmdln.option("-j", "--json", help="show the parts in json structure", action="store_true")
+    @option("-j", "--json", help="show the parts in json structure", action="store_true")
     def do_struct(self, subcmd, opts, message):
         """${cmd_name}: get the structure of the specified message
 
         ${cmd_usage}
         ${cmd_option_list}
         """
-        client = MdClient(self.maildir)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
         as_json = getattr(opts, "json", False)
-        client.getstruct(message, as_json=as_json, stream=sys.stdout)
+        client.getstruct(message, as_json=as_json, stream=self.stdout)
 
     def do_file(self, subcmd, opts, message):
         """${cmd_name}: download the whole file of the message.
         
         ${cmd_usage}
         """
-        client = MdClient(self.maildir)
-        client.get(message, sys.stdout)
+        client = MdClient(self.maildir, filesystem=self.filesystem)
+        client.get(message, self.stdout)
 
     def do_shell(self, subcmd, opts):
         """${cmd_name}: run a shell for md.
@@ -227,10 +215,10 @@ class MdCLI(cmdln.Cmdln):
         """
         # TODO fix this because it's broken right now
         shell = MdCLI()
-        mdcli.main(argv=[], loop=cmdln.LOOP_ALWAYS)
+        mdcli.main(argv=[], loop=LOOP_ALWAYS)
 
-    @cmdln.option("-N", "--noop", help="do not pull", action="store_true")
-    @cmdln.option("-f", "--filter", help="filter filename", action="store")
+    @option("-N", "--noop", help="do not pull", action="store_true")
+    @option("-f", "--filter", help="filter filename", action="store")
     def do_pull(self, subcmd, opts, remote_maildir):
         """${cmd_name}: pull the remote maildir into the local maildir.
 
@@ -249,7 +237,7 @@ class MdCLI(cmdln.Cmdln):
             remote_maildir
             )
         if not m:
-            print >>sys.stderr, "md pull: the remote maildir url was unrecognized"
+            print("md pull: the remote maildir url was unrecognized", file=self.stderr)
             return
 
         local_maildir = self.maildir
@@ -263,7 +251,7 @@ class MdCLI(cmdln.Cmdln):
             filterfd = None
             # Some error loading the filterfile
             if verbose:
-                print >>sys.stderr, "could not load filter file"
+                print("md pull: could not load filter file", file=self.stderr)
 
         data = m.groupdict()
         if data.get("protocol") == "ssh":
@@ -272,7 +260,7 @@ class MdCLI(cmdln.Cmdln):
                 data.get("urlpart")
                 )
             if not m:
-                print >>sys.stderr, "md pull: %s was not a remote maildir" % remote_maildir
+                print("md pull: %s was not a remote maildir" % remote_maildir, file=self.stderr)
                 return
             data = m.groupdict()
             host = data.get("hostname", None) \
@@ -284,7 +272,7 @@ class MdCLI(cmdln.Cmdln):
             maildir = data.get("urlpart")
             mdlib.pull.filepull(maildir, local_maildir, noop, verbose, filterfd)
         else:
-            print "%s not a recognized protocol" % protocol
+            print("md pull: %s not a recognized protocol" % protocol, file=self.stderr)
 
         # Finally try and close the filterfd
         if filterfd:
@@ -292,13 +280,13 @@ class MdCLI(cmdln.Cmdln):
                 filterfd.close()
             except:
                 if verbose:
-                    print >>sys.stderr, "couldn't close open filter file"
+                    print("md pull: couldn't close open filter file", file=self.stderr)
 
     def do_newfilter(self, subcmd, opts):
         """${cmd_name}: make a filterfile and spit it to stdout.
         """
         from mdlib.filterprocessor import RULES
-        print RULES
+        print(RULES, file=self.stdout)
 
     def do_storecheck(self, subcmd, opts):
         """${cmd_name}: checks the store for files that may not be in the maildirs.
@@ -323,24 +311,41 @@ class MdCLI(cmdln.Cmdln):
                     store_location = os.readlink(filename)
                     assert existspath(store_location) and dirname(store_location) == store
                 except AssertionError:
-                    print "%s was not a link into the store" % (
-                        "/".join([
-                                filename.split("/")[-2],
-                                filename.split("/")[-1]
-                                ])
-                        )
+                    print("%s was not a link into the store" % (
+                            "/".join([
+                                    filename.split("/")[-2],
+                                    filename.split("/")[-1]
+                                    ])
+                            ), 
+                          file=self.stdout)
                 else:
                     found_list.append(basename(store_location))
 
         for storefile in os.listdir(store):
             if storefile not in found_list:
-                print "%s found in store but not folders" % joinpath("store", storefile)
+                print(
+                    "%s found in store but not folders" % joinpath("store", storefile), 
+                    file=self.stdout
+                    )
 
+def main(*argv, 
+          filesystem=None, 
+          do_exit=True,
+          stdout=None,
+          stderr=None):
+    """Main method for the cli.
 
-if __name__ == "__main__":
+    We allow the filesystem to be overridden for test purposes."""
     try:
         mdcli = MdCLI()
-        sys.exit(mdcli.main())
+        mdcli.filesystem = filesystem
+        mdcli.stdout = stdout or sys.stdout
+        mdcli.stderr = stderr or sys.stderr
+        retval = mdcli.main(*argv)
+        if do_exit:
+            sys.exit(retval)
+        else:
+            return retval
     except KeyboardInterrupt:
         pass
 

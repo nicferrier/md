@@ -30,6 +30,10 @@ setup(
     packages = ["mdlib"],
     package_dir = {"":"src"},
     test_suite = "mdlib",
-    scripts=['src/md'],
+    entry_points = {
+       'console_scripts': [
+            'md = mdlib.cli:main'
+        ],
+    },
     classifiers =  classifiers
     )

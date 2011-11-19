@@ -128,7 +128,7 @@ class MdMessage(object):
 
     def items(self):
         """Present the email headers"""
-        return list(self.items())
+        return list(self.iteritems())
 
     def _flags(self):
         m = self.msgpathre.match(self.filename)
@@ -218,7 +218,7 @@ class _KeysCache(object):
         if isinstance(stored, dict):
             filename = stored["path"]
             folder = stored["folder"]
-            if since > 0.0:
+            if since and since > 0.0:
                 st = stat(filename)
                 if st.st_mtime < since:
                     return None
@@ -230,7 +230,7 @@ class _KeysCache(object):
                 )
             self.store[key] = stored
         else:
-            if since > 0.0:
+            if since and since > 0.0:
                 st = stat(stored.filename)
                 if st.st_mtime < since:
                     return None
@@ -256,7 +256,7 @@ class _KeysCache(object):
         return
 
     def items(self):
-        return list(self.items())
+        return list(self.iteritems())
 
     def items_since(self, since=None):
         return list(self.iteritems_since(since=since))
@@ -290,6 +290,7 @@ class MdFolder(object):
         return ".%s" % self.folder if self.is_subfolder else self.folder
 
     def _foldername(self, additionalpath=""):
+        """Dot decorate a folder name."""
         if not self._foldername_cache.get(additionalpath):
             fn = joinpath(self.base, self.folder, additionalpath) \
                 if not self.is_subfolder \
@@ -374,7 +375,8 @@ class MdFolder(object):
 
     def _muaprocessnew(self):
         """Moves all 'new' files into cur, correctly flagging"""
-        files = self.filesystem.listdir(self._foldername("new"))
+        foldername = self._foldername("new")
+        files = self.filesystem.listdir(foldername)
         for filename in files:
             if filename == "":
                 continue
@@ -457,18 +459,18 @@ class MdFolder(object):
         return self.__iter__()
 
     def iteritems(self):
-        for k in self.keys():
+        for k in self.iterkeys():
             yield k, self[k]
 
     def keys(self):
-        return list(self.keys())
+        return list(self.iterkeys())
 
     def values(self):
-        return list([self[k] for k in self.keys()])
+        return list([self[k] for k in self.iterkeys()])
 
     def items(self):
         filestore, keystore = self._fileslist()
-        return list(keystore.items())
+        return keystore.items()
 
     def items_since(self, since=None):
         filestore, keystore = self._fileslist()

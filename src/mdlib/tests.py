@@ -37,6 +37,7 @@ TESTMSG1=TESTMSG % "someone@example1.com"
 TESTMSG2=TESTMSG % "someone@example2.com"
 
 import unittest
+import re
 
 class TestMaildir(unittest.TestCase):
      def setUp(self):
@@ -56,12 +57,11 @@ class TestMaildir(unittest.TestCase):
 
      def test_regex(self):
           """Test the regex we use to identify the parts of maildirs"""
-          import re
           m = re.match(
                "/var/maildir/testmaildir/new/%s" % MDMSG_FILENAME_PATTERN,
                "/var/maildir/testmaildir/new/1270028940.V801Ie8c95dM583793.hostname:2,"
                )
-          self.assertEquals(
+          self.assertEqual(
                m.group("key"),
                "1270028940.V801Ie8c95dM583793"
                )
@@ -69,7 +69,7 @@ class TestMaildir(unittest.TestCase):
                "/var/maildir/testmaildir/new/%s" % MDMSG_FILENAME_PATTERN,
                "/var/maildir/testmaildir/new/1270028940.V801Ie8c95dM583793.hostname"
                )
-          self.assertEquals(
+          self.assertEqual(
                m.group("key"),
                "1270028940.V801Ie8c95dM583793"
                )
@@ -77,17 +77,17 @@ class TestMaildir(unittest.TestCase):
 
      def test_keys(self):
           keys =  list(self.folder.keys())
-          self.assertEquals(
+          self.assertEqual(
                keys,
                ['1270028940.V801Ie8c95dM583793']
                )
 
      def test_key(self):
-         self.assertEquals(
+         self.assertEqual(
               self.folder["1270028940.V801Ie8c95dM583793"].__str__(),
               'MdMessage__<testmaildir>__1270028940.V801Ie8c95dM583793'
               )
-         #self.assertEquals(
+         #self.assertEqual(
          #     self.folder["1270028940"].content.split('\n')[0],
          #     'Return-Path: <someone@example1.com>'
          #     )
@@ -98,7 +98,7 @@ class TestMaildir(unittest.TestCase):
           msg_key = "1270028940.V801Ie8c95dM583793"
           self.folder.move(msg_key, target)
           msg = target[msg_key]
-          self.assert_(msg)
+          self.assertTrue(msg)
           try:
                self.folder[msg_key]
           except KeyError:
@@ -109,25 +109,25 @@ class TestMaildir(unittest.TestCase):
 
      def test_items(self):
           lst = list(self.folder.items())
-          self.assertEquals(
+          self.assertEqual(
                [(name,msg.content.split("\n")[0]) for name,msg in lst],
                [('1270028940.V801Ie8c95dM583793', 'Return-Path: <someone@example1.com>')]
                )
 
      def test_values(self):
-          self.assertEquals(
+          self.assertEqual(
                list(self.folder.values())[0].date.day,
                3
                )
 
-          self.assertEquals(
+          self.assertEqual(
                list(self.folder.values())[0].get_from(),
                'richard@example.com'
                )
 
      def test_contenttype(self):
           """Gets a message and checks it's the right content type"""
-          self.assertEquals(
+          self.assertEqual(
                self.folder["1270028940.V801Ie8c95dM583793"].get_content_type(),
                'text/plain'
                )
@@ -135,32 +135,32 @@ class TestMaildir(unittest.TestCase):
      def test_setseen(self):
           msg = self.folder["1270028940.V801Ie8c95dM583793"]
           msg.is_seen = True
-          self.assert_(
+          self.assertTrue(
                self.folder["1270028940.V801Ie8c95dM583793"].is_seen
                )
 
      def test_settrashed(self):
          self.folder["1270028940.V801Ie8c95dM583793"].is_trashed = True
-         self.assert_(
+         self.assertTrue(
               self.folder["1270028940.V801Ie8c95dM583793"].is_trashed
               )
 
      def test_remove(self):
           del self.folder["1270028940.V801Ie8c95dM583793"]
-          self.assertEquals(list(self.folder.keys()), [])
+          self.assertEqual(list(self.folder.keys()), [])
 
      def test_folders(self):
-         self.assertEquals(
+         self.assertEqual(
               list(self.folder.folders().__iter__())[0].folder,
               'special'
               )
-         self.assertEquals(
+         self.assertEqual(
               self.folder.folders()["special"].folder,
               'special'
               )
 
      def test_folder_access(self):
-          self.assertEquals(
+          self.assertEqual(
                self.folder.folders()["special"]["1270028940.V801Ie8c95dM583793"].content.split('\n')[0],
                'Return-Path: <someone@example2.com>'
                )
@@ -184,7 +184,7 @@ class TestClient(unittest.TestCase):
      def test_lsfolders(self):
          stream = StringIO()
          self.client.lsfolders(stream=stream)
-         self.assertEquals(
+         self.assertEqual(
               stream.getvalue(),
               'special\n'
               )
@@ -192,23 +192,24 @@ class TestClient(unittest.TestCase):
      def test_ls(self):
           stream = StringIO()
           self.client.ls(stream=stream)
-          self.assertEquals(
+          self.assertEqual(
                [i.strip() for i in stream.getvalue().split('  ') if i.strip() != ''],
-               ['testmaildir%s1270028940.V801Ie8c95dM583793' % SEPERATOR, '2010-05-03 04:37:26', 'richard@example.com', '[]', 'Some message from python']
+               ['INBOX%s1270028940.V801Ie8c95dM583793' % SEPERATOR, '2010-05-03 04:37:26', 'richard@example.com', '[]', 'Some message from python']
                )
 
      def test_lisp(self):
+          self.maxDiff = None
           stream = StringIO()
           self.client.lisp(stream=stream)
-          self.assertEquals(
+          self.assertEqual(
                stream.getvalue(),
-               '{"from": ["", "richard@example.com"], "flags": "", "key": "testmaildir%s1270028940.V801Ie8c95dM583793", "date": "2010-05-03 04:37:26", "folder": "testmaildir", "subject": "Some message from python"}\n'  % SEPERATOR
+               '{"from": ["", "richard@example.com"], "flags": "", "key": "INBOX%s1270028940.V801Ie8c95dM583793", "date": "2010-05-03 04:37:26", "folder": "INBOX", "subject": "Some message from python"}\n'  % SEPERATOR
                )
 
      def test_folderls(self):
           stream = StringIO()
           self.client.ls(foldername="special", stream=stream)
-          self.assertEquals(
+          self.assertEqual(
                [i.strip() for i in stream.getvalue().split('  ') if i.strip() != ''],
                ['special%s1270028941.V801Ie8c95dM583795' % SEPERATOR, '2010-05-03 04:37:26', 'richard@example.com', '[]', 'Some message from python']
                )
@@ -218,8 +219,8 @@ class TestClient(unittest.TestCase):
           self.client.move("INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR, "special")
           self.client.ls(foldername="special", stream=stream)
           lines = stream.getvalue().split("\n")
-          self.assertEquals(lines[0].split("  ")[0], 'special%s1270028940.V801Ie8c95dM583793' % SEPERATOR)
-          self.assertEquals(lines[1].split("  ")[0], 'special%s1270028941.V801Ie8c95dM583795' % SEPERATOR)
+          self.assertEqual(lines[0].split("  ")[0], 'special%s1270028940.V801Ie8c95dM583793' % SEPERATOR)
+          self.assertEqual(lines[1].split("  ")[0], 'special%s1270028941.V801Ie8c95dM583795' % SEPERATOR)
 
      def test_msgdata(self):
           stream = StringIO()
@@ -228,11 +229,11 @@ class TestClient(unittest.TestCase):
                stream=stream
                )
           msgdata = stream.getvalue()
-          self.assertEquals(
+          self.assertEqual(
                msgdata.split("\n")[0],
                'return-path: <someone@example1.com>'
                )
-          self.assertEquals(
+          self.assertEqual(
                msgdata.split("\n")[-3],
                'Hi.'
                )
@@ -243,7 +244,7 @@ class TestClient(unittest.TestCase):
               "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR,
               stream=stream
               )
-         self.assertEquals(
+         self.assertEqual(
               stream.getvalue(),
               'text/plain\n'
               )
@@ -251,7 +252,7 @@ class TestClient(unittest.TestCase):
      def test_folders(self):
          stream = StringIO()
          self.client.ls(foldername="special", stream=stream)
-         self.assertEquals(
+         self.assertEqual(
               [i.strip() for i in stream.getvalue().split('  ') if i.strip() != ''],
               ['special%s1270028941.V801Ie8c95dM583795' % SEPERATOR, '2010-05-03 04:37:26', 'richard@example.com', '[]', 'Some message from python']
               )
@@ -263,7 +264,7 @@ class TestClient(unittest.TestCase):
                stream=stream
                )
           msgdata = stream.getvalue()
-          self.assertEquals(
+          self.assertEqual(
                msgdata.split("\n")[0],
                'return-path: <someone@example2.com>'
                )
@@ -274,7 +275,7 @@ class TestClient(unittest.TestCase):
                )
 
 
-from . import filterprocessor
+from mdlib import filterprocessor
 class TestFilter(unittest.TestCase):
      """Test that our simple filtering all works."""
      def setUp(self):
@@ -283,10 +284,62 @@ class TestFilter(unittest.TestCase):
      def test_parse(self):
           """Test that basic parsing works"""
           rules_list = filterprocessor.parse(self.rules)
-          self.assert_(rules_list[-1].pattern == "/somepath", "%r" % rules_list[-1].pattern)
-          self.assert_(rules_list[-1].field == "subject", "%r" % rules_list[-1].field)
-          self.assert_(rules_list[-1].command == "rm", "%r" % rules_list[-1].command)
-          
+          self.assertTrue(rules_list[-1].pattern == "/somepath", "%r" % rules_list[-1].pattern)
+          self.assertTrue(rules_list[-1].field == "subject", "%r" % rules_list[-1].field)
+          self.assertTrue(rules_list[-1].command == "rm", "%r" % rules_list[-1].command)
+
+
+from mdlib import cli
+
+class TestCli(unittest.TestCase):
+     """Test that the cmdln cli is working."""
+     def setUp(self):
+          from pyproxyfs import TestFS
+          stdout = StringIO()
+          stderr = StringIO()
+          self.extras = {
+               "filesystem": TestFS({
+                   "/var/maildir/testmaildir/cur/": "",
+                   "/var/maildir/testmaildir/new/1270028940.V801Ie8c95dM583793.hostname.domain.tld": TESTMSG1,
+                   "/var/maildir/testmaildir/.special/cur/": "",
+                   "/var/maildir/testmaildir/.special/new/": "",
+                   "/var/maildir/testmaildir/.special/new/1270028941.V801Ie8c95dM583795.hostname": TESTMSG2,
+                   }),
+               "do_exit": False,
+               "stdout": stdout,
+               "stderr": stderr
+               }
+
+     def test_ls(self):
+          """Test we can list a folder correctly."""
+          cli.main(
+               ["md", "-M", "/var/maildir/testmaildir", "ls"], 
+               **self.extras
+               )
+          output = self.extras["stdout"].getvalue()
+          rx = r"^(?P<ref>[^ ]+)[ \t]+" \
+              + r"2010-05-03 " \
+              + r"(?P<time>[0-9]{2}:[0-9]{2}:[0-9]{2})[ \t]+" \
+              + r"(?P<from>[a-zA-Z0-9.@]+)[ \t]+" \
+              + r"(.*)$"
+          m = re.match(rx, output)
+          self.assertTrue(m)
+          # We can't test the time because of timezones!!! OMFG!!!
+          # self.assertEqual(m.group("time"), "04:37:26")
+          self.assertEqual(m.group("from"), "richard@example.com")
+          self.assertEqual(m.group("ref"), "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR)
+
+     def test_text(self):
+          """Test we find the plain text of the message."""
+          cli.main(
+               ["md", "-M", "/var/maildir/testmaildir", 
+                "text", "INBOX%s1270028940.V801Ie8c95dM583793" % SEPERATOR], 
+               **self.extras
+               )
+          output = self.extras["stdout"].getvalue()
+          m = re.search("Hi.", output)
+          self.assertTrue(m)
+
 
 if __name__ == "__main__":
      unittest.main()
