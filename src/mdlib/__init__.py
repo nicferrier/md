@@ -21,7 +21,7 @@ mdlib - A maildir and maildir client library .
 """
 
 __author__= "nic ferrier - nic@ferrier.me.uk"
-__version__ = "0.1"
+__version__ = "0.80"
 
 import sys
 import re

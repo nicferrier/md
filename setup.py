@@ -2,6 +2,14 @@
 #from setuptools import find_packages
 from setuptools import setup
 
+
+# Get the version
+import os.path
+import sys
+sys.path = [os.path.join(os.path.dirname(__file__), "src")] + sys.path
+from mdlib import __version__ as md_version
+
+
 classifiers = [
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Developers',
@@ -17,7 +25,7 @@ classifiers = [
 # cmdln
 setup(
     name = "md",
-    version = "0.70",
+    version = md_version,
     description = "Maildir command line mail client and library",
     long_description = """A command line tool and shell to allow use of
  a maildir directly. Fully fledged MUAs should be trivial to build on top of this.""",

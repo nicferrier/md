@@ -42,6 +42,7 @@ import os
 import sys
 import re
 
+from mdlib import __version__ as md_version
 from mdlib import MdClient
 
 ## This should be redefined as an option and a thread local
@@ -80,6 +81,10 @@ class MdCLI(Cmdln):
     @property
     def maildir(self):
         return getattr(self.options, "maildir", MAILDIR) or MAILDIR
+
+    def do_version(self, subcmd, opts):
+        """${cmd_name}: what version are we?"""
+        print(md_version, file=self.stdout)
 
     def do_lsfolders(self, subcmd, opts):
         """${cmd_name}: list the sub folders of the maildir.
