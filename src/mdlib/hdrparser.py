@@ -18,17 +18,14 @@ class HeaderOnlyParser(HeaderParser):
             mp = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
         except:
             mp = fp
-        else:
-            mmaped = True
 
         data = ""
+
+        # While parsing the header we can convert to us-ascii?
         while True:
             line = mp.readline()
-            if mmaped:
-                line = line.decode("us-ascii")
-
-            data = data + line
-            if line == "\n":
+            data = data + line.decode("us-ascii")
+            if line == b"\n":
                 break
         feedparser.feed(data) # mp[0:5000])
         return feedparser.close()

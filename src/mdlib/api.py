@@ -50,7 +50,7 @@ class MdMessage(object):
             raise Exception("no filename specified")
 
         # Start by JUST reading the headers
-        with filesystem.open(filename) as hdrs_fd:
+        with filesystem.open(filename, mode="r+b") as hdrs_fd:
             self.msgobj = _hdr_parser.parse(hdrs_fd, headersonly=True)
 
         self.headers_only = True

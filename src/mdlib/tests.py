@@ -1,8 +1,8 @@
 
-from mdlib import MdFolder
-from mdlib import MdClient
+from mdlib.api import MdFolder
 from mdlib.api import MDMSG_FILENAME_PATTERN
 from mdlib.api import SEPERATOR
+from mdlib.client import MdClient
 from io import StringIO
 
 TESTMSG = """Return-Path: <%s>
@@ -33,8 +33,8 @@ Date: Mon,  3 May 2010 05:37:26 +0200 (CEST)
 Hi.
 """
 
-TESTMSG1=TESTMSG % "someone@example1.com"
-TESTMSG2=TESTMSG % "someone@example2.com"
+TESTMSG1 = (TESTMSG % "someone@example1.com").encode("us-ascii")
+TESTMSG2 = (TESTMSG % "someone@example2.com").encode("us-ascii")
 
 import unittest
 import re
@@ -110,8 +110,8 @@ class TestMaildir(unittest.TestCase):
      def test_items(self):
           lst = list(self.folder.items())
           self.assertEqual(
-               [(name,msg.content.split("\n")[0]) for name,msg in lst],
-               [('1270028940.V801Ie8c95dM583793', 'Return-Path: <someone@example1.com>')]
+               [(name,msg.content.splitlines()[0]) for name,msg in lst],
+               [('1270028940.V801Ie8c95dM583793', b'Return-Path: <someone@example1.com>')]
                )
 
      def test_values(self):
@@ -127,8 +127,9 @@ class TestMaildir(unittest.TestCase):
 
      def test_contenttype(self):
           """Gets a message and checks it's the right content type"""
+          msg = self.folder["1270028940.V801Ie8c95dM583793"]
           self.assertEqual(
-               self.folder["1270028940.V801Ie8c95dM583793"].get_content_type(),
+               msg.get_content_type(),
                'text/plain'
                )
 
@@ -161,8 +162,8 @@ class TestMaildir(unittest.TestCase):
 
      def test_folder_access(self):
           self.assertEqual(
-               self.folder.folders()["special"]["1270028940.V801Ie8c95dM583793"].content.split('\n')[0],
-               'Return-Path: <someone@example2.com>'
+               self.folder.folders()["special"]["1270028940.V801Ie8c95dM583793"].content.splitlines()[0],
+               b'Return-Path: <someone@example2.com>'
                )
 
 class TestClient(unittest.TestCase):

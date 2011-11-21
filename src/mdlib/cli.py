@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # md - a simple maildir command line user agent
 # Copyright (C) 2010  Nic Ferrier <nic@ferrier.me.uk>
 
@@ -33,9 +34,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__author__ = "Nic Ferrier <nic@ferrier.me.uk>"
-__version__ = 0.1
-
 import os.path
 from os.path import join as joinpath
 import os
@@ -43,7 +41,7 @@ import sys
 import re
 
 from mdlib import __version__ as md_version
-from mdlib import MdClient
+from mdlib.client import MdClient
 
 ## This should be redefined as an option and a thread local
 ## Default value should come from an env var or be ~/Maildir
@@ -355,12 +353,6 @@ class MdCLI(Cmdln):
                     "%s found in store but not folders" % joinpath("store", storefile), 
                     file=self.stdout
                     )
-
-class ShellCLI(MdCLI):
-    def do_quit(self, subcmd, opts):
-        """${cmd_name}: quit the shell.
-        """
-        self.stop = True
 
 
 from mdlib.cmdln import LOOP_ALWAYS
