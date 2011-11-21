@@ -13,7 +13,6 @@ class HeaderOnlyParser(HeaderParser):
         feedparser = FeedParser(self._class)
         feedparser._set_headersonly()
 
-        mmaped = False
         try:
             mp = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
         except:
