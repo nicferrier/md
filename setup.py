@@ -37,7 +37,7 @@ setup(
     platforms = ["unix"],
     packages = ["mdlib"],
     package_dir = {"":"src"},
-    install_requires=['pyprofyfs'],
+    install_requires=['pyproxyfs'],
     test_suite = "mdlib",
     entry_points = {
        'console_scripts': [
