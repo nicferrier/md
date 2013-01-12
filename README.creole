@@ -1,3 +1,10 @@
+== Important note about md ==
+
+Because python changed too much (python 3 and python 2 left all this very hard to support) 
+I switched to an elisp only solution [[http://github.com/nicferrier/emacs-maildir|emacs-maildir]].
+
+If you want to pick this up and make it all work again I would be very happy for you to do so.
+
 = md - a maildir client and library =
 
 {{{md}}} is a foundation for handling mail directly with maildirs. It allows
